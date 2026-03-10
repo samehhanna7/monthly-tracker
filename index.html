@@ -41,7 +41,7 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      padding: 28px 18px 100px;
+      padding: 28px 18px max(100px, calc(80px + env(safe-area-inset-bottom)));
       -webkit-font-smoothing: antialiased;
     }
     .app {
@@ -468,6 +468,58 @@
     }
     .shop-clear:hover { background: var(--accent-dim); color: var(--danger); }
 
+    /* ─── Spend Progress Bar ────────────────────────────────────── */
+    .progress-wrap { margin: 10px 0 14px; }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: rgba(17,17,17,0.45);
+      margin-bottom: 5px;
+    }
+    .progress-track {
+      height: 6px;
+      background: rgba(0,0,0,0.1);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 99px;
+      background: var(--positive);
+      transition: width 0.7s cubic-bezier(0.22,1,0.36,1);
+    }
+    .progress-fill.warning { background: #c97d0a; }
+    .progress-fill.over    { background: var(--danger); }
+
+    /* ─── Month Progress Bar (inside time card) ──────────────────── */
+    .month-progress-row {
+      width: 100%;
+      margin-top: 8px;
+    }
+    .month-progress-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.67rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 5px;
+    }
+    .month-progress-track {
+      height: 5px;
+      background: rgba(0,0,0,0.08);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .month-progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      width: 0%;
+      transition: width 0.8s cubic-bezier(0.22,1,0.36,1);
+    }
+
     /* ─── Icons ──────────────────────────────────────────────────── */
     i[data-lucide] {
       display: inline-block;
@@ -542,6 +594,11 @@
     /* Category cards animate in (delay set per-card via JS) */
     .category-card {
       animation: fadeSlideUp 0.45s cubic-bezier(0.22,1,0.36,1) both;
+      transition: transform 0.2s cubic-bezier(0.22,1,0.36,1), box-shadow 0.2s ease;
+    }
+    .category-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.1);
     }
 
     /* Modal */
@@ -564,7 +621,7 @@
 
     /* ─── Mobile ─────────────────────────────────────────────────── */
     @media (max-width: 480px) {
-      body { padding: 20px 14px 110px; }
+      body { padding: 20px 14px max(110px, calc(90px + env(safe-area-inset-bottom))); }
       .header { margin-bottom: 18px; }
       .header h1 { font-size: 1.55rem; }
       .time-card {
@@ -620,6 +677,15 @@
       <div class="time-stat">
         <div class="number" id="days-remaining">—</div>
         <div class="unit">Days</div>
+      </div>
+    </div>
+    <div class="month-progress-row">
+      <div class="month-progress-meta">
+        <span>Month progress</span>
+        <span id="month-pct-label">—</span>
+      </div>
+      <div class="month-progress-track">
+        <div id="month-progress-fill" class="month-progress-fill" style="width:0%"></div>
       </div>
     </div>
   </div>
@@ -765,6 +831,31 @@ function computeCategory(cat, timeInfo) {
 // ── Pastel colors for category cards ─────────────────────────────
 const catColors = ['cat-color-0', 'cat-color-1', 'cat-color-2', 'cat-color-3'];
 
+// ── Smart category icon mapping ───────────────────────────────────
+function getCategoryIcon(name) {
+  const n = name.toLowerCase();
+  if (/grocer|supermarket|market|costco|trader|whole/.test(n)) return 'shopping-cart';
+  if (/food|meal|lunch|dinner|breakfast|snack/.test(n))         return 'utensils';
+  if (/restaurant|cafe|coffee|dining|eat|takeout|doordash/.test(n)) return 'utensils';
+  if (/rent|mortgage|housing|hoa/.test(n))                      return 'home';
+  if (/gas|fuel|petrol/.test(n))                                return 'fuel';
+  if (/car|auto|vehicle|transport|uber|lyft|parking|toll/.test(n)) return 'car';
+  if (/electric|utility|utilities|water|power|internet|phone|bill/.test(n)) return 'zap';
+  if (/entertain|movie|netflix|hulu|streaming|spotify|music|concert/.test(n)) return 'tv-2';
+  if (/health|medical|doctor|gym|fitness|pharma|medicine|dental/.test(n)) return 'heart-pulse';
+  if (/cloth|fashion|apparel|shoes|shoe/.test(n))               return 'shirt';
+  if (/travel|flight|hotel|vacation|trip|airbnb/.test(n))       return 'plane';
+  if (/saving|emergency|invest|401/.test(n))                    return 'piggy-bank';
+  if (/insur/.test(n))                                          return 'shield-check';
+  if (/school|education|tuition|book|course/.test(n))           return 'graduation-cap';
+  if (/pet|dog|cat|vet/.test(n))                                return 'paw-print';
+  if (/subscript|membership/.test(n))                           return 'repeat-2';
+  if (/gift|birthday|holiday|holiday/.test(n))                  return 'gift';
+  if (/hair|beauty|salon|spa|personal/.test(n))                 return 'sparkles';
+  if (/kid|child|baby|daycare/.test(n))                         return 'baby';
+  return 'wallet';
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  RENDER
 // ─────────────────────────────────────────────────────────────────
@@ -780,6 +871,12 @@ function render() {
     document.getElementById('month-display').textContent  = timeInfo.monthLabel;
     document.getElementById('weeks-remaining').textContent = timeInfo.weeks;
     document.getElementById('days-remaining').textContent  = timeInfo.days;
+    // Month progress bar
+    const totalDays   = daysBetween(data.monthStart, data.monthEnd) + 1;
+    const elapsed     = totalDays - timeInfo.days;
+    const monthPct    = Math.min(100, Math.round((elapsed / totalDays) * 100));
+    document.getElementById('month-progress-fill').style.width = monthPct + '%';
+    document.getElementById('month-pct-label').textContent     = monthPct + '% through';
   } else if (timeInfo.expired) {
     timeCard.style.display  = '';
     setupCard.style.display = 'none';
@@ -838,14 +935,22 @@ function render() {
       </div>`;
     }
 
+    // Spend progress bar
+    const spentPct   = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
+    const barClass   = spentPct >= 100 ? 'over' : spentPct >= 80 ? 'warning' : '';
+    const barWidth   = Math.min(100, spentPct).toFixed(1);
+    const pctDisplay = Math.round(spentPct);
+
     const pills = `
       <span class="pill">Budget ${fmt(cat.budget)}</span>
       <span class="pill">Spent ${fmt(cat.spent)}</span>`;
 
+    const catIcon = getCategoryIcon(cat.name);
+
     card.innerHTML = `
       <div class="cat-top">
         <div class="cat-name-wrap">
-          <div class="cat-icon"><i data-lucide="wallet"></i></div>
+          <div class="cat-icon"><i data-lucide="${catIcon}"></i></div>
           <div class="cat-name">${escHtml(cat.name)}</div>
         </div>
         <div class="cat-actions">
@@ -855,6 +960,15 @@ function render() {
       </div>
       <span class="cat-balance ${isNeg ? 'negative' : ''}">${fmt(fig.remaining)}${isNeg ? ' <span style="font-size:0.7rem;font-weight:600;opacity:0.7"><i data-lucide="alert-triangle"></i> over</span>' : ''}</span>
       <div class="cat-meta">${pills}</div>
+      <div class="progress-wrap">
+        <div class="progress-meta">
+          <span>${pctDisplay}% spent</span>
+          <span>${isNeg ? 'over budget' : fmt(cat.budget - cat.spent) + ' remaining'}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill ${barClass}" style="width:${barWidth}%"></div>
+        </div>
+      </div>
       <div class="cat-figures">${figureBoxes}</div>`;
 
     listEl.appendChild(card);

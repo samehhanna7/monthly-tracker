@@ -1179,14 +1179,29 @@ let sessionTallies      = {};
 let openShopPanels      = new Set();
 let sessionTaxSelections = {}; // { panelIndex: 0.13 or 0 }
 
-// ── Ontario HST tax detection ──────────────────────────────────────
+// ── Ontario HST tax detection (follows CRA GST/HST Guide 4-3) ─────
 function detectTax(name) {
   const n = (name || '').toLowerCase().trim();
   if (!n) return { rate: 0.13, label: '13% HST', confident: false };
 
-  // Zero-rated: basic groceries (food for human consumption)
-  if (/\b(milk|cream|cheese|butter|egg|eggs|flour|sugar|rice|pasta|noodle|cereal|oat|oats|bread|bun|buns|bagel|tortilla|pita|wrap|fruit|apple|pear|banana|orange|grape|berry|berries|strawberr|blueberr|raspberr|melon|mango|peach|plum|cherr|vegetable|carrot|broccoli|cauliflower|potato|potatoes|sweet potato|onion|garlic|celery|cucumber|pepper|zucchini|spinach|kale|lettuce|arugula|mushroom|tomato|avocado|corn|peas|beans|lentil|chickpea|tofu|chicken|beef|pork|lamb|turkey|fish|salmon|tuna|shrimp|seafood|steak|ground beef|ground pork|deli|meat|sausage|bacon|ham|produce|fresh|frozen food|frozen meal)\b/.test(n))
+  // Zero-rated: basic groceries — meat, produce, dairy, staples
+  if (/\b(milk|cream|cheese|butter|egg|eggs|flour|sugar|rice|pasta|noodle|cereal|oat|oats|bread|bun|buns|bagel|tortilla|pita|wrap|fruit|apple|pear|banana|orange|grape|berry|berries|strawberr|blueberr|raspberr|melon|mango|peach|plum|cherr|vegetable|carrot|broccoli|cauliflower|potato|potatoes|sweet potato|onion|garlic|celery|cucumber|pepper|zucchini|spinach|kale|lettuce|arugula|mushroom|tomato|avocado|corn|peas|beans|lentil|chickpea|tofu|chicken|beef|pork|lamb|turkey|fish|salmon|tuna|shrimp|seafood|steak|ground beef|ground pork|deli meat|cold cut|meat|sausage|bacon|ham|produce|frozen vegetable|frozen fruit|frozen meal|frozen food)\b/.test(n))
     return { rate: 0, label: 'Zero-rated (groceries)', confident: true };
+
+  // Zero-rated: packaged coffee & tea (grocery staples per CRA)
+  // Note: prepared drinks from a café (latte, cappuccino) are taxable
+  if (/\b(coffee bean|ground coffee|instant coffee|coffee pod|k-cup|nespresso pod|tea bag|tea bags|green tea|black tea|herbal tea|chamomile|peppermint tea|loose leaf tea|coffee ground)\b/.test(n) ||
+      /^coffee$/.test(n) || /^tea$/.test(n))
+    return { rate: 0, label: 'Zero-rated (grocery)', confident: true };
+
+  // Zero-rated: fruit & vegetable juice with ≥25% real juice (CRA rule)
+  if (/\b(apple juice|orange juice|grape juice|cranberry juice|vegetable juice|tomato juice|fruit juice|grapefruit juice|pineapple juice|mango juice|juice box)\b/.test(n) ||
+      /^juice$/.test(n))
+    return { rate: 0, label: 'Zero-rated (juice ≥25%)', confident: true };
+
+  // Zero-rated: baking chocolate & cocoa (CRA explicitly zero-rates these)
+  if (/\b(chocolate chip|chocolate chips|baking chocolate|cocoa powder|cocoa|baker.s chocolate|dark chocolate chip)\b/.test(n))
+    return { rate: 0, label: 'Zero-rated (baking)', confident: true };
 
   // Zero-rated: feminine hygiene products
   if (/\b(tampon|tampons|pad\b|pads\b|menstrual|period product|panty liner|sanitary napkin)\b/.test(n))
@@ -1200,11 +1215,19 @@ function detectTax(name) {
   if (/\b(childcare|child care|daycare|day care|babysit|babysitter)\b/.test(n))
     return { rate: 0, label: '0% (childcare)', confident: true };
 
-  // Clearly taxable consumer goods — confident 13%
-  if (/\b(shampoo|conditioner|body wash|soap|hand soap|toothpaste|toothbrush|floss|deodorant|lotion|moisturizer|sunscreen|vitamin|supplement|cosmetic|makeup|lipstick|mascara|perfume|cologne|razor|shaving|alcohol|beer|wine|spirits|liquor|cigarette|tobacco|vape|coffee\b|espresso|latte|tea\b|chocolate|candy|chip|chips|snack|bar\b|pop\b|soda|juice\b|energy drink|water bottle|pet food|dog food|cat food|electronic|headphone|earphone|phone case|charger|cable|toy|game|shirt|shoes|boots|jacket|bag|purse|wallet|cleaning|detergent|bleach|paper towel|toilet paper|garbage bag|laundry)\b/.test(n))
+  // Uncertain: plain "chocolate" — could be baking (zero-rated) or a candy bar (taxable)
+  if (/\bchocolate\b/.test(n))
+    return { rate: 0.13, label: '13% HST', confident: false };
+
+  // Taxable: prepared café drinks (not packaged grocery items)
+  if (/\b(latte|cappuccino|americano|frappuccino|espresso\b|hot chocolate\b|smoothie)\b/.test(n))
     return { rate: 0.13, label: '13% HST', confident: true };
 
-  // Default: 13% but we're not sure
+  // Taxable: clearly non-food consumer goods & confirmed taxable food items
+  if (/\b(shampoo|conditioner|body wash|soap|hand soap|toothpaste|toothbrush|floss|deodorant|lotion|moisturizer|sunscreen|vitamin|supplement|cosmetic|makeup|lipstick|mascara|perfume|cologne|razor|shaving|alcohol|beer|wine|spirits|liquor|cigarette|tobacco|vape|candy|chocolate bar|chip|chips|popcorn|snack mix|granola bar|pop\b|soda|carbonated|sparkling water|energy drink|sports drink|fruit drink|fruit punch|pet food|dog food|cat food|electronic|headphone|earphone|phone case|charger|cable|toy|game|shirt|shoes|boots|jacket|bag|purse|wallet|cleaning|detergent|bleach|paper towel|toilet paper|garbage bag|laundry)\b/.test(n))
+    return { rate: 0.13, label: '13% HST', confident: true };
+
+  // Default: 13% — not sure
   return { rate: 0.13, label: '13% HST', confident: false };
 }
 

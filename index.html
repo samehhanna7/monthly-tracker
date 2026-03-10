@@ -468,44 +468,34 @@
     }
     .shop-clear:hover { background: var(--accent-dim); color: var(--danger); }
 
-    /* ─── Shop Tax Toggle ────────────────────────────────────────── */
-    .shop-tax-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin: -4px 0 12px;
-      flex-wrap: wrap;
-    }
-    .shop-tax-label {
-      font-size: 0.75rem;
-      font-weight: 600;
-      color: rgba(17,17,17,0.45);
-      flex-shrink: 0;
-    }
-    .shop-tax-btn {
+    /* ─── Shop Category Dropdown ─────────────────────────────────── */
+    .shop-cat-row { margin-bottom: 10px; }
+    .shop-cat-select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px solid rgba(0,0,0,0.12);
+      border-radius: 12px;
       font-family: inherit;
-      font-size: 0.72rem;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1.5px solid rgba(0,0,0,0.15);
-      background: rgba(255,255,255,0.6);
-      color: rgba(17,17,17,0.5);
+      font-size: 0.88rem;
+      background: rgba(255,255,255,0.65);
+      color: var(--text);
+      outline: none;
       cursor: pointer;
-      transition: all 0.15s;
     }
-    .shop-tax-btn:hover { border-color: rgba(0,0,0,0.3); color: var(--text); }
-    .shop-tax-btn.active      { background: var(--text);     border-color: var(--text);     color: #fff; }
-    .shop-tax-btn.active-five { background: #b07800;         border-color: #b07800;         color: #fff; }
-    .shop-tax-btn.active-zero { background: var(--positive); border-color: var(--positive); color: #fff; }
-    .shop-tax-uncertain {
-      font-size: 0.68rem;
-      font-weight: 800;
-      color: var(--accent);
-      background: var(--accent-dim);
-      border-radius: 999px;
-      padding: 2px 7px;
+    .shop-cat-select:focus { border-color: var(--accent); background: #fff; }
+    .shop-cat-select.unset { color: rgba(17,17,17,0.4); }
+    .shop-tax-hint { margin: -4px 0 10px; min-height: 22px; }
+    .shop-tax-hint-text {
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 8px;
+      display: inline-block;
+      color: rgba(17,17,17,0.5);
     }
+    .shop-tax-hint-text.rate-five { background: rgba(176,120,0,0.1);  color: #b07800; }
+    .shop-tax-hint-text.rate-hst  { background: rgba(0,0,0,0.06);     color: rgba(17,17,17,0.55); }
+
     .shop-item-tax-tag {
       font-size: 0.6rem;
       font-weight: 700;
@@ -1182,116 +1172,57 @@ document.getElementById('modal-confirm').addEventListener('click', function(e) {
 // ─────────────────────────────────────────────────────────────────
 let sessionTallies       = {};
 let openShopPanels       = new Set();
-let sessionTaxSelections = {}; // { panelIndex: 0.13 | 0.05 | 0 }
-let sessionTaxManual     = {}; // { panelIndex: true } — user manually picked a rate, stop auto-suggest
+let sessionCatSelections = {}; // { panelIndex: category key or '' }
 
-// ── Ontario HST tax detection (follows CRA GST/HST Guide 4-3) ─────
-// amount: the pre-tax dollar value (or null if not yet entered)
-function detectTax(name, amount) {
-  const n = (name || '').toLowerCase().trim();
-  if (!n) return { rate: 0.13, label: '13% HST', confident: false };
+// ── Category definitions ───────────────────────────────────────────
+const SHOP_CATEGORIES = [
+  { key: 'groceries',   rate: 0,    label: '🛒 Groceries — milk, eggs, bread, meat, fruit, vegetables' },
+  { key: 'rx',          rate: 0,    label: '💊 Prescription or medicine' },
+  { key: 'cafe',        rate: null, label: '☕ Café drink or snack — coffee, Iced Capp, muffin, sandwich' },
+  { key: 'baby',        rate: 0.05, label: '👶 Baby and children\'s items — diapers, clothing, shoes, car seats' },
+  { key: 'book',        rate: 0.05, label: '📚 Printed book or audiobook' },
+  { key: 'femhyg',      rate: 0.05, label: '🧴 Feminine hygiene — tampons, pads, menstrual cups' },
+  { key: 'clothing',    rate: 0.13, label: '👕 Adult clothing or shoes' },
+  { key: 'restaurant',  rate: 0.13, label: '🍽️ Restaurant meal or takeout' },
+  { key: 'alcohol',     rate: 0.13, label: '🍺 Alcohol' },
+  { key: 'electronics', rate: 0.13, label: '📱 Electronics — phone, laptop, headphones' },
+  { key: 'home',        rate: 0.13, label: '🏠 Home and furniture — appliances, furniture, household goods' },
+  { key: 'personal',    rate: 0.13, label: '💄 Personal care — skincare, shampoo, cosmetics' },
+  { key: 'other',       rate: 0.13, label: '🏷️ Everything else' },
+];
 
-  // ── PREPARED FOOD & DRINKS — Ontario $4.00 threshold rule ────────
-  // Items ≤ $4.00 get the provincial POS rebate (5% only).
-  // Items > $4.00 are full 13% HST. Price unknown → 5% default + ? flag.
-  if (/\b(coffee|tea\b|latte|cappuccino|americano|frappuccino|espresso|hot chocolate|smoothie|bubble tea|boba|sandwich|burger|sub\b|taco|burrito|poutine|fries|fast food|hot dog)\b/.test(n)) {
-    if (amount != null && !isNaN(amount) && amount > 0) {
-      return amount <= 4.00
-        ? { rate: 0.05, label: '5% Fed. only (≤$4)', confident: true }
-        : { rate: 0.13, label: '13% HST (>$4)',      confident: true };
-    }
-    return { rate: 0.05, label: '5% or 13% (price?)', confident: false };
+// Returns the effective tax rate for the current category + price
+function getEffectiveTaxRate(catKey, preAmount) {
+  const cat = SHOP_CATEGORIES.find(c => c.key === catKey);
+  if (!cat) return 0.13;
+  if (catKey === 'cafe') return (preAmount <= 4.00) ? 0.05 : 0.13;
+  return cat.rate;
+}
+
+// Updates the hint line below the dropdown (café only)
+function refreshTaxHint(index) {
+  const hintEl   = document.getElementById(`shop-tax-hint-${index}`);
+  const catEl    = document.getElementById(`shop-cat-${index}`);
+  const amountEl = document.getElementById(`shop-amount-${index}`);
+  if (!hintEl) return;
+  const catKey = catEl ? catEl.value : '';
+  if (catKey !== 'cafe') { hintEl.innerHTML = ''; return; }
+  const amt = parseFloat(amountEl ? amountEl.value : '');
+  if (!amt || isNaN(amt) || amt <= 0) {
+    hintEl.innerHTML = '<span class="shop-tax-hint-text">Enter the price to see which rate applies</span>';
+    return;
   }
-
-  // ── ONTARIO POS REBATE ITEMS — 5% (provincial portion rebated) ───
-
-  // Feminine hygiene products (Fix 2)
-  if (/\b(tampon|tampons|pad\b|pads\b|menstrual|period product|panty liner|sanitary napkin|menstrual cup|diva cup|period cup)\b/.test(n))
-    return { rate: 0.05, label: '5% Fed. only', confident: true };
-
-  // Diapers (Fix 3)
-  if (/\b(diaper|diapers|pampers|huggies|pull.up|pull.ups|nappy|nappies)\b/.test(n))
-    return { rate: 0.05, label: '5% Fed. only', confident: true };
-
-  // Children's clothing & footwear (Fix 3)
-  if (/\b(kids shoe|kids shoes|kids boot|kids boots|children.s shoe|children.s boot|baby shoe|toddler shoe|kids cloth|children.s cloth|baby cloth|toddler cloth|onesie|onesies|kids jacket|children.s jacket|baby outfit|kids outfit|baby sock|kids sock|children.s clothing|baby clothing|toddler clothing|kids clothing)\b/.test(n))
-    return { rate: 0.05, label: '5% Fed. only', confident: true };
-
-  // Printed books (Fix 3)
-  if (/\b(book\b|books\b|novel\b|textbook|hardcover|paperback|printed book|children.s book|comic book|colouring book)\b/.test(n))
-    return { rate: 0.05, label: '5% Fed. only', confident: true };
-
-  // Children's car seats & booster seats (Fix 3)
-  if (/\b(car seat|booster seat|infant seat|child seat|baby seat)\b/.test(n))
-    return { rate: 0.05, label: '5% Fed. only', confident: true };
-
-  // ── ZERO-RATED: basic groceries ───────────────────────────────────
-  if (/\b(milk|cream|cheese|butter|egg|eggs|flour|sugar|rice|pasta|noodle|cereal|oat|oats|bread|bun|buns|bagel|tortilla|pita|fruit|apple|pear|banana|orange|grape|berry|berries|strawberr|blueberr|raspberr|melon|mango|peach|plum|cherr|vegetable|carrot|broccoli|cauliflower|potato|potatoes|sweet potato|onion|garlic|celery|cucumber|pepper|zucchini|spinach|kale|lettuce|arugula|mushroom|tomato|avocado|corn|peas|beans|lentil|chickpea|tofu|chicken|beef|pork|lamb|turkey|fish|salmon|tuna|shrimp|seafood|steak|ground beef|ground pork|deli meat|cold cut|meat|sausage|bacon|ham|produce|frozen vegetable|frozen fruit|frozen meal|frozen food)\b/.test(n))
-    return { rate: 0, label: 'Zero-rated (groceries)', confident: true };
-
-  // Zero-rated: fruit & vegetable juice ≥25% real juice (CRA rule)
-  if (/\b(apple juice|orange juice|grape juice|cranberry juice|vegetable juice|tomato juice|fruit juice|grapefruit juice|pineapple juice|mango juice|juice box)\b/.test(n) || /^juice$/.test(n))
-    return { rate: 0, label: 'Zero-rated (juice ≥25%)', confident: true };
-
-  // Zero-rated: baking chocolate & cocoa
-  if (/\b(chocolate chip|chocolate chips|baking chocolate|cocoa powder|cocoa|baker.s chocolate|dark chocolate chip)\b/.test(n))
-    return { rate: 0, label: 'Zero-rated (baking)', confident: true };
-
-  // Zero-rated: prescription drugs
-  if (/\b(prescription|rx\b|antibiotic|insulin|inhaler|medication|dispens)\b/.test(n))
-    return { rate: 0, label: '0% (prescription)', confident: true };
-
-  // Zero-rated: childcare / daycare
-  if (/\b(childcare|child care|daycare|day care|babysit|babysitter)\b/.test(n))
-    return { rate: 0, label: '0% (childcare)', confident: true };
-
-  // Uncertain: plain "chocolate" — baking vs candy bar
-  if (/\bchocolate\b/.test(n))
-    return { rate: 0.13, label: '13% HST', confident: false };
-
-  // ── TAXABLE 13%: non-food goods & clearly taxable food items ──────
-  if (/\b(shampoo|conditioner|body wash|soap|hand soap|toothpaste|toothbrush|floss|deodorant|lotion|moisturizer|sunscreen|vitamin|supplement|cosmetic|makeup|lipstick|mascara|perfume|cologne|razor|shaving|alcohol|beer|wine|spirits|liquor|cigarette|tobacco|vape|candy|chocolate bar|chip|chips|popcorn|snack mix|granola bar|pop\b|soda|carbonated|sparkling water|energy drink|sports drink|fruit drink|fruit punch|pet food|dog food|cat food|electronic|headphone|earphone|phone case|charger|cable|toy|game|shirt|shoes|boots|jacket|bag|purse|wallet|cleaning|detergent|bleach|paper towel|toilet paper|garbage bag|laundry)\b/.test(n))
-    return { rate: 0.13, label: '13% HST', confident: true };
-
-  // Default: 13% — not sure
-  return { rate: 0.13, label: '13% HST', confident: false };
+  if (amt <= 4.00) {
+    hintEl.innerHTML = '<span class="shop-tax-hint-text rate-five">5% Fed. only — price is $4.00 or under</span>';
+  } else {
+    hintEl.innerHTML = '<span class="shop-tax-hint-text rate-hst">13% HST — price is over $4.00</span>';
+  }
 }
 
-function getTaxRowHtml(index, currentName, currentAmount) {
-  const taxRate  = sessionTaxSelections[index] !== undefined ? sessionTaxSelections[index] : 0.13;
-  const name     = currentName   !== undefined ? currentName   : '';
-  const amt      = parseFloat(currentAmount);
-  const detected = detectTax(name, isNaN(amt) ? null : amt);
-  const showUncertain = name && !detected.confident;
-  return `
-    <span class="shop-tax-label">Tax:</span>
-    <button class="shop-tax-btn${taxRate === 0.13 ? ' active'      : ''}" onclick="setShopTax(${index}, 0.13)">13% HST</button>
-    <button class="shop-tax-btn${taxRate === 0.05 ? ' active-five' : ''}" onclick="setShopTax(${index}, 0.05)">5% Fed.</button>
-    <button class="shop-tax-btn${taxRate === 0    ? ' active-zero' : ''}" onclick="setShopTax(${index}, 0)">0% Tax-Free</button>
-    ${showUncertain ? '<span class="shop-tax-uncertain" title="Not 100% sure — verify on the label">?</span>' : ''}
-  `;
-}
-
-function autoSuggestTax(index) {
-  if (sessionTaxManual[index]) return; // user locked a rate — don't override
-  const nameEl   = document.getElementById(`shop-label-${index}`);
-  const amountEl = document.getElementById(`shop-amount-${index}`);
-  if (!nameEl) return;
-  const name   = nameEl.value;
-  const amt    = parseFloat(amountEl ? amountEl.value : '');
-  const detected = detectTax(name, isNaN(amt) ? null : amt);
-  sessionTaxSelections[index] = detected.rate;
-  const taxRowEl = document.getElementById(`shop-tax-row-${index}`);
-  if (taxRowEl) taxRowEl.innerHTML = getTaxRowHtml(index, name, amountEl ? amountEl.value : '');
-}
-
-function setShopTax(index, rate) {
-  sessionTaxSelections[index] = rate;
-  sessionTaxManual[index]     = true; // lock — stop auto-suggest until next item
-  const nameEl   = document.getElementById(`shop-label-${index}`);
-  const amountEl = document.getElementById(`shop-amount-${index}`);
-  const taxRowEl = document.getElementById(`shop-tax-row-${index}`);
-  if (taxRowEl) taxRowEl.innerHTML = getTaxRowHtml(index, nameEl ? nameEl.value : '', amountEl ? amountEl.value : '');
+function onCatChange(index) {
+  const catEl = document.getElementById(`shop-cat-${index}`);
+  if (catEl) sessionCatSelections[index] = catEl.value;
+  refreshTaxHint(index);
 }
 
 function toggleShopPanel(index) {
@@ -1299,8 +1230,7 @@ function toggleShopPanel(index) {
   else {
     openShopPanels.add(index);
     if (!sessionTallies[index]) sessionTallies[index] = [];
-    sessionTaxSelections[index] = 0.13;
-    sessionTaxManual[index]     = false;
+    sessionCatSelections[index] = '';
   }
   updateShopPanel(index);
 }
@@ -1308,18 +1238,19 @@ function toggleShopPanel(index) {
 function addShopItem(index) {
   const labelEl  = document.getElementById(`shop-label-${index}`);
   const amountEl = document.getElementById(`shop-amount-${index}`);
+  const catEl    = document.getElementById(`shop-cat-${index}`);
+  const catKey   = catEl ? catEl.value : '';
   const preAmount = parseFloat(amountEl.value);
+  if (!catKey)                  { if (catEl) catEl.focus(); return; }
   if (!preAmount || preAmount <= 0) { amountEl.focus(); return; }
   if (!sessionTallies[index]) sessionTallies[index] = [];
-  const taxRate   = sessionTaxSelections[index] !== undefined ? sessionTaxSelections[index] : 0.13;
+  const taxRate    = getEffectiveTaxRate(catKey, preAmount);
   const postAmount = Math.round(preAmount * (1 + taxRate) * 100) / 100;
-  const taxLabel = taxRate === 0 ? 'free' : taxRate === 0.05 ? 'five' : 'hst';
+  const taxLabel   = taxRate === 0 ? 'free' : taxRate === 0.05 ? 'five' : 'hst';
   sessionTallies[index].push({ label: labelEl.value.trim(), amount: postAmount, taxLabel });
   labelEl.value = ''; amountEl.value = '';
-  sessionTaxSelections[index] = 0.13;
-  sessionTaxManual[index]     = false; // unlock auto-suggest for next item
+  sessionCatSelections[index] = ''; // reset dropdown to placeholder
   updateShopPanel(index);
-  document.getElementById(`shop-amount-${index}`).focus();
 }
 
 function removeShopItem(index, itemIndex) {
@@ -1329,7 +1260,7 @@ function removeShopItem(index, itemIndex) {
 
 function clearShopTally(index) {
   sessionTallies[index] = []; openShopPanels.delete(index);
-  delete sessionTaxSelections[index]; delete sessionTaxManual[index];
+  delete sessionCatSelections[index];
   updateShopPanel(index);
 }
 
@@ -1400,19 +1331,32 @@ function updateShopPanel(index) {
       <button class="shop-clear" onclick="clearShopTally(${index})">Clear &amp; Close</button>`;
   }
 
+  const catOptions = SHOP_CATEGORIES.map(c =>
+    `<option value="${c.key}">${c.label}</option>`).join('');
+
   panelEl.innerHTML = `
     <div class="shop-input-row">
       <input class="shop-input-name" type="text" id="shop-label-${index}" placeholder="Item name (optional)"
-             oninput="autoSuggestTax(${index})"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <input class="shop-input-amount" type="number" id="shop-amount-${index}" placeholder="$0.00" min="0" step="0.01"
-             oninput="autoSuggestTax(${index})"
+             oninput="refreshTaxHint(${index})"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <button class="btn btn-primary btn-icon" onclick="addShopItem(${index})"><i data-lucide="plus"></i></button>
     </div>
-    <div class="shop-tax-row" id="shop-tax-row-${index}">${getTaxRowHtml(index, '', '')}</div>
+    <div class="shop-cat-row">
+      <select class="shop-cat-select" id="shop-cat-${index}" onchange="onCatChange(${index})">
+        <option value="">What are you buying?</option>
+        ${catOptions}
+      </select>
+    </div>
+    <div class="shop-tax-hint" id="shop-tax-hint-${index}"></div>
     ${itemsHtml}
-    ${items.length === 0 ? '<div class="shop-empty-hint">Enter an amount above and tap Add to start your tally.</div>' : summaryHtml}`;
+    ${items.length === 0 ? '<div class="shop-empty-hint">Select a category and enter a price to start your tally.</div>' : summaryHtml}`;
+
+  // Restore dropdown state and hint after re-render
+  const catEl = document.getElementById(`shop-cat-${index}`);
+  if (catEl) catEl.value = sessionCatSelections[index] || '';
+  refreshTaxHint(index);
 
   if (window.lucide) lucide.createIcons();
 }

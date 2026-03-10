@@ -468,6 +468,59 @@
     }
     .shop-clear:hover { background: var(--accent-dim); color: var(--danger); }
 
+    /* ─── Shop Tax Toggle ────────────────────────────────────────── */
+    .shop-tax-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: -4px 0 12px;
+      flex-wrap: wrap;
+    }
+    .shop-tax-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: rgba(17,17,17,0.45);
+      flex-shrink: 0;
+    }
+    .shop-tax-btn {
+      font-family: inherit;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1.5px solid rgba(0,0,0,0.15);
+      background: rgba(255,255,255,0.6);
+      color: rgba(17,17,17,0.5);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .shop-tax-btn:hover { border-color: rgba(0,0,0,0.3); color: var(--text); }
+    .shop-tax-btn.active { background: var(--text); border-color: var(--text); color: #fff; }
+    .shop-tax-btn.active-zero { background: var(--positive); border-color: var(--positive); color: #fff; }
+    .shop-tax-uncertain {
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: var(--accent);
+      background: var(--accent-dim);
+      border-radius: 999px;
+      padding: 2px 7px;
+    }
+    .shop-item-tax-tag {
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(0,0,0,0.08);
+      color: rgba(17,17,17,0.4);
+      margin-left: 5px;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+    .shop-item-tax-tag.free {
+      background: rgba(39,103,73,0.1);
+      color: var(--positive);
+    }
+
     /* ─── Spend Progress Bar ────────────────────────────────────── */
     .progress-wrap { margin: 10px 0 14px; }
     .progress-meta {
@@ -1122,23 +1175,90 @@ document.getElementById('modal-confirm').addEventListener('click', function(e) {
 // ─────────────────────────────────────────────────────────────────
 //  LIVE CALCULATOR (SHOP MODE)
 // ─────────────────────────────────────────────────────────────────
-let sessionTallies = {};
-let openShopPanels = new Set();
+let sessionTallies      = {};
+let openShopPanels      = new Set();
+let sessionTaxSelections = {}; // { panelIndex: 0.13 or 0 }
+
+// ── Ontario HST tax detection ──────────────────────────────────────
+function detectTax(name) {
+  const n = (name || '').toLowerCase().trim();
+  if (!n) return { rate: 0.13, label: '13% HST', confident: false };
+
+  // Zero-rated: basic groceries (food for human consumption)
+  if (/\b(milk|cream|cheese|butter|egg|eggs|flour|sugar|rice|pasta|noodle|cereal|oat|oats|bread|bun|buns|bagel|tortilla|pita|wrap|fruit|apple|pear|banana|orange|grape|berry|berries|strawberr|blueberr|raspberr|melon|mango|peach|plum|cherr|vegetable|carrot|broccoli|cauliflower|potato|potatoes|sweet potato|onion|garlic|celery|cucumber|pepper|zucchini|spinach|kale|lettuce|arugula|mushroom|tomato|avocado|corn|peas|beans|lentil|chickpea|tofu|chicken|beef|pork|lamb|turkey|fish|salmon|tuna|shrimp|seafood|steak|ground beef|ground pork|deli|meat|sausage|bacon|ham|produce|fresh|frozen food|frozen meal)\b/.test(n))
+    return { rate: 0, label: 'Zero-rated (groceries)', confident: true };
+
+  // Zero-rated: feminine hygiene products
+  if (/\b(tampon|tampons|pad\b|pads\b|menstrual|period product|panty liner|sanitary napkin)\b/.test(n))
+    return { rate: 0, label: '0% (fem. hygiene)', confident: true };
+
+  // Zero-rated: prescription drugs
+  if (/\b(prescription|rx\b|antibiotic|insulin|inhaler|medication|dispens)\b/.test(n))
+    return { rate: 0, label: '0% (prescription)', confident: true };
+
+  // Exempt: childcare / daycare
+  if (/\b(childcare|child care|daycare|day care|babysit|babysitter)\b/.test(n))
+    return { rate: 0, label: '0% (childcare)', confident: true };
+
+  // Clearly taxable consumer goods — confident 13%
+  if (/\b(shampoo|conditioner|body wash|soap|hand soap|toothpaste|toothbrush|floss|deodorant|lotion|moisturizer|sunscreen|vitamin|supplement|cosmetic|makeup|lipstick|mascara|perfume|cologne|razor|shaving|alcohol|beer|wine|spirits|liquor|cigarette|tobacco|vape|coffee\b|espresso|latte|tea\b|chocolate|candy|chip|chips|snack|bar\b|pop\b|soda|juice\b|energy drink|water bottle|pet food|dog food|cat food|electronic|headphone|earphone|phone case|charger|cable|toy|game|shirt|shoes|boots|jacket|bag|purse|wallet|cleaning|detergent|bleach|paper towel|toilet paper|garbage bag|laundry)\b/.test(n))
+    return { rate: 0.13, label: '13% HST', confident: true };
+
+  // Default: 13% but we're not sure
+  return { rate: 0.13, label: '13% HST', confident: false };
+}
+
+function getTaxRowHtml(index, currentName) {
+  const taxRate = sessionTaxSelections[index] !== undefined ? sessionTaxSelections[index] : 0.13;
+  const name    = currentName !== undefined ? currentName : '';
+  const detected = detectTax(name);
+  const showUncertain = name && !detected.confident;
+  return `
+    <span class="shop-tax-label">Tax:</span>
+    <button class="shop-tax-btn${taxRate === 0.13 ? ' active' : ''}" onclick="setShopTax(${index}, 0.13)">13% HST</button>
+    <button class="shop-tax-btn${taxRate === 0 ? ' active-zero' : ''}" onclick="setShopTax(${index}, 0)">0% Tax-Free</button>
+    ${showUncertain ? '<span class="shop-tax-uncertain" title="Not 100% sure — verify on the label">?</span>' : ''}
+  `;
+}
+
+function autoSuggestTax(index) {
+  const nameEl = document.getElementById(`shop-label-${index}`);
+  if (!nameEl) return;
+  const name = nameEl.value;
+  const detected = detectTax(name);
+  sessionTaxSelections[index] = detected.rate;
+  const taxRowEl = document.getElementById(`shop-tax-row-${index}`);
+  if (taxRowEl) taxRowEl.innerHTML = getTaxRowHtml(index, name);
+}
+
+function setShopTax(index, rate) {
+  sessionTaxSelections[index] = rate;
+  const nameEl = document.getElementById(`shop-label-${index}`);
+  const taxRowEl = document.getElementById(`shop-tax-row-${index}`);
+  if (taxRowEl) taxRowEl.innerHTML = getTaxRowHtml(index, nameEl ? nameEl.value : '');
+}
 
 function toggleShopPanel(index) {
   if (openShopPanels.has(index)) { openShopPanels.delete(index); }
-  else { openShopPanels.add(index); if (!sessionTallies[index]) sessionTallies[index] = []; }
+  else {
+    openShopPanels.add(index);
+    if (!sessionTallies[index]) sessionTallies[index] = [];
+    sessionTaxSelections[index] = 0.13; // default to HST on open
+  }
   updateShopPanel(index);
 }
 
 function addShopItem(index) {
   const labelEl  = document.getElementById(`shop-label-${index}`);
   const amountEl = document.getElementById(`shop-amount-${index}`);
-  const amount   = parseFloat(amountEl.value);
-  if (!amount || amount <= 0) { amountEl.focus(); return; }
+  const preAmount = parseFloat(amountEl.value);
+  if (!preAmount || preAmount <= 0) { amountEl.focus(); return; }
   if (!sessionTallies[index]) sessionTallies[index] = [];
-  sessionTallies[index].push({ label: labelEl.value.trim(), amount });
+  const taxRate   = sessionTaxSelections[index] !== undefined ? sessionTaxSelections[index] : 0.13;
+  const postAmount = Math.round(preAmount * (1 + taxRate) * 100) / 100;
+  sessionTallies[index].push({ label: labelEl.value.trim(), amount: postAmount, taxLabel: taxRate > 0 ? 'HST' : 'free' });
   labelEl.value = ''; amountEl.value = '';
+  sessionTaxSelections[index] = 0.13; // reset to default for next item
   updateShopPanel(index);
   document.getElementById(`shop-amount-${index}`).focus();
 }
@@ -1149,7 +1269,7 @@ function removeShopItem(index, itemIndex) {
 }
 
 function clearShopTally(index) {
-  sessionTallies[index] = []; openShopPanels.delete(index); updateShopPanel(index);
+  sessionTallies[index] = []; openShopPanels.delete(index); delete sessionTaxSelections[index]; updateShopPanel(index);
 }
 
 function updateShopPanel(index) {
@@ -1176,12 +1296,17 @@ function updateShopPanel(index) {
   let itemsHtml = '';
   if (items.length > 0) {
     itemsHtml = `<div class="shop-items">` +
-      items.map((item, i) => `
+      items.map((item, i) => {
+        const taxTag = item.taxLabel
+          ? `<span class="shop-item-tax-tag${item.taxLabel === 'free' ? ' free' : ''}">${item.taxLabel === 'free' ? 'tax-free' : 'HST'}</span>`
+          : '';
+        return `
         <div class="shop-item${i === items.length - 1 ? ' shop-item-new' : ''}">
-          <span class="shop-item-label">${item.label ? escHtml(item.label) : '<em style="opacity:0.4">—</em>'}</span>
+          <span class="shop-item-label">${item.label ? escHtml(item.label) : '<em style="opacity:0.4">—</em>'}${taxTag}</span>
           <span class="shop-item-amount">${fmt(item.amount)}</span>
           <button class="shop-item-remove" onclick="removeShopItem(${index},${i})">×</button>
-        </div>`).join('') + `</div>`;
+        </div>`;
+      }).join('') + `</div>`;
   }
 
   let summaryHtml = '';
@@ -1217,11 +1342,13 @@ function updateShopPanel(index) {
   panelEl.innerHTML = `
     <div class="shop-input-row">
       <input class="shop-input-name" type="text" id="shop-label-${index}" placeholder="Item name (optional)"
+             oninput="autoSuggestTax(${index})"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <input class="shop-input-amount" type="number" id="shop-amount-${index}" placeholder="$0.00" min="0" step="0.01"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <button class="btn btn-primary btn-icon" onclick="addShopItem(${index})"><i data-lucide="plus"></i></button>
     </div>
+    <div class="shop-tax-row" id="shop-tax-row-${index}">${getTaxRowHtml(index, '')}</div>
     ${itemsHtml}
     ${items.length === 0 ? '<div class="shop-empty-hint">Enter an amount above and tap Add to start your tally.</div>' : summaryHtml}`;
 

@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&display=swap" rel="stylesheet" />
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
   <style>
     /* ─── Reset ─────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -467,6 +468,29 @@
     }
     .shop-clear:hover { background: var(--accent-dim); color: var(--danger); }
 
+    /* ─── Icons ──────────────────────────────────────────────────── */
+    i[data-lucide] {
+      display: inline-block;
+      vertical-align: middle;
+      width: 14px;
+      height: 14px;
+      stroke-width: 2.2;
+      flex-shrink: 0;
+    }
+    .btn i[data-lucide]  { width: 15px; height: 15px; }
+    .btn-icon i[data-lucide] { width: 14px; height: 14px; }
+    .figure-label i[data-lucide] { width: 11px; height: 11px; stroke-width: 2.5; opacity: 0.65; margin-right: 2px; }
+    .time-card .label i[data-lucide] { width: 12px; height: 12px; opacity: 0.7; }
+    .setup-card h2 i[data-lucide] { width: 18px; height: 18px; vertical-align: -3px; margin-right: 4px; opacity: 0.7; }
+    .cat-name-wrap { display: flex; align-items: center; gap: 8px; }
+    .cat-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: rgba(0,0,0,0.1);
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .cat-icon i[data-lucide] { width: 16px; height: 16px; opacity: 0.7; }
+
     /* ─── Animations ────────────────────────────────────────────── */
 
     /* Cards & sections fade + rise on load */
@@ -578,14 +602,14 @@
       <h1>Monthly Tracker</h1>
     </div>
     <div class="header-actions">
-      <button class="btn btn-ghost" id="btn-new-month">New Month</button>
+      <button class="btn btn-ghost" id="btn-new-month"><i data-lucide="rotate-ccw"></i> New Month</button>
     </div>
   </div>
 
   <!-- Time remaining -->
   <div id="time-card" class="time-card" style="display:none;">
     <div>
-      <div class="label">Time remaining in</div>
+      <div class="label"><i data-lucide="calendar"></i> Time remaining in</div>
       <div class="month-name" id="month-display">—</div>
     </div>
     <div class="time-stats">
@@ -602,7 +626,7 @@
 
   <!-- Month setup -->
   <div id="setup-card" class="setup-card">
-    <h2>Set up this month</h2>
+    <h2><i data-lucide="calendar-range"></i>Set up this month</h2>
     <p>Enter your month's start and end date so the app can calculate how many weeks and days you have left to spend.</p>
     <div class="setup-row">
       <div class="field">
@@ -624,7 +648,7 @@
 
   <div id="category-list" class="category-list"></div>
 
-  <button class="btn btn-add-cat" id="btn-add-category">+ Add Budget Category</button>
+  <button class="btn btn-add-cat" id="btn-add-category"><i data-lucide="plus-circle"></i> Add Budget Category</button>
 
 </div>
 
@@ -794,17 +818,17 @@ function render() {
     if (timeInfo.valid) {
       figureBoxes += `
         <div class="figure-box ${isNeg ? 'over' : ''}">
-          <div class="figure-label">Calc. Weekly</div>
+          <div class="figure-label"><i data-lucide="calendar-days"></i> Calc. Weekly</div>
           <div class="figure-value ${isNeg ? 'negative' : ''}">${fmt(fig.weeklyCalc)}</div>
         </div>
         <div class="figure-box ${isNeg ? 'over' : ''}">
-          <div class="figure-label">Calc. Daily</div>
+          <div class="figure-label"><i data-lucide="sun"></i> Calc. Daily</div>
           <div class="figure-value ${isNeg ? 'negative' : ''}">${fmt(fig.dailyCalc)}</div>
         </div>`;
       if (cat.weeklyLimit !== null && cat.weeklyLimit !== undefined && cat.weeklyLimit !== '') {
         figureBoxes += `
           <div class="figure-box custom" style="grid-column:1/-1;">
-            <div class="figure-label">Custom Weekly Limit</div>
+            <div class="figure-label"><i data-lucide="shield-check"></i> Custom Weekly Limit</div>
             <div class="figure-value">${fmt(Number(cat.weeklyLimit))}</div>
           </div>`;
       }
@@ -820,13 +844,16 @@ function render() {
 
     card.innerHTML = `
       <div class="cat-top">
-        <div class="cat-name">${escHtml(cat.name)}</div>
+        <div class="cat-name-wrap">
+          <div class="cat-icon"><i data-lucide="wallet"></i></div>
+          <div class="cat-name">${escHtml(cat.name)}</div>
+        </div>
         <div class="cat-actions">
-          <button class="btn btn-ghost btn-icon" onclick="openEditModal(${index})">Edit</button>
-          <button class="btn btn-danger btn-icon" onclick="openDeleteModal(${index})">Delete</button>
+          <button class="btn btn-ghost btn-icon" onclick="openEditModal(${index})" title="Edit"><i data-lucide="pencil"></i></button>
+          <button class="btn btn-danger btn-icon" onclick="openDeleteModal(${index})" title="Delete"><i data-lucide="trash-2"></i></button>
         </div>
       </div>
-      <span class="cat-balance ${isNeg ? 'negative' : ''}">${fmt(fig.remaining)}${isNeg ? ' <span style="font-size:0.7rem;font-weight:600;opacity:0.7">over</span>' : ''}</span>
+      <span class="cat-balance ${isNeg ? 'negative' : ''}">${fmt(fig.remaining)}${isNeg ? ' <span style="font-size:0.7rem;font-weight:600;opacity:0.7"><i data-lucide="alert-triangle"></i> over</span>' : ''}</span>
       <div class="cat-meta">${pills}</div>
       <div class="cat-figures">${figureBoxes}</div>`;
 
@@ -844,6 +871,9 @@ function render() {
 
     if (openShopPanels.has(index)) updateShopPanel(index);
   });
+
+  // Render all lucide icons that were injected as HTML strings
+  if (window.lucide) lucide.createIcons();
 }
 
 function escHtml(str) {
@@ -1076,10 +1106,12 @@ function updateShopPanel(index) {
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <input class="shop-input-amount" type="number" id="shop-amount-${index}" placeholder="$0.00" min="0" step="0.01"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
-      <button class="btn btn-primary btn-icon" onclick="addShopItem(${index})">Add</button>
+      <button class="btn btn-primary btn-icon" onclick="addShopItem(${index})"><i data-lucide="plus"></i></button>
     </div>
     ${itemsHtml}
     ${items.length === 0 ? '<div class="shop-empty-hint">Enter an amount above and tap Add to start your tally.</div>' : summaryHtml}`;
+
+  if (window.lucide) lucide.createIcons();
 }
 
 
@@ -1101,6 +1133,7 @@ document.addEventListener('click', function(e) {
 //  BOOT
 // ─────────────────────────────────────────────────────────────────
 render();
+if (window.lucide) lucide.createIcons();
 </script>
 </body>
 </html>

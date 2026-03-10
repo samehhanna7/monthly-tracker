@@ -467,6 +467,77 @@
     }
     .shop-clear:hover { background: var(--accent-dim); color: var(--danger); }
 
+    /* ─── Animations ────────────────────────────────────────────── */
+
+    /* Cards & sections fade + rise on load */
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(22px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Modal sheet slides up from bottom */
+    @keyframes slideUpSheet {
+      from { transform: translateY(100%); opacity: 0.6; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+
+    /* Overlay dims in */
+    @keyframes overlayIn {
+      from { background: rgba(0,0,0,0); }
+      to   { background: rgba(0,0,0,0.35); }
+    }
+
+    /* Shop panel unfolds downward */
+    @keyframes expandDown {
+      from { opacity: 0; transform: translateY(-10px) scaleY(0.94); }
+      to   { opacity: 1; transform: translateY(0)     scaleY(1); }
+    }
+
+    /* New shop item pops in */
+    @keyframes popIn {
+      0%   { opacity: 0; transform: scale(0.88) translateX(-6px); }
+      65%  { transform: scale(1.03) translateX(0); }
+      100% { opacity: 1; transform: scale(1)    translateX(0); }
+    }
+
+    /* Button bounce on press */
+    @keyframes btnBounce {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(0.93); }
+      75%  { transform: scale(1.04); }
+      100% { transform: scale(1); }
+    }
+
+    /* Page-load targets */
+    .header     { animation: fadeSlideUp 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+    .time-card  { animation: fadeSlideUp 0.45s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+    .setup-card { animation: fadeSlideUp 0.45s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+    .section-header { animation: fadeSlideUp 0.4s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
+    .btn-add-cat    { animation: fadeSlideUp 0.4s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
+
+    /* Category cards animate in (delay set per-card via JS) */
+    .category-card {
+      animation: fadeSlideUp 0.45s cubic-bezier(0.22,1,0.36,1) both;
+    }
+
+    /* Modal */
+    .modal-overlay { animation: overlayIn 0.25s ease both; }
+    .modal         { animation: slideUpSheet 0.38s cubic-bezier(0.32,0.72,0,1) both; }
+
+    /* Shop panel */
+    .shop-panel-open {
+      animation: expandDown 0.3s cubic-bezier(0.22,1,0.36,1) both;
+      transform-origin: top center;
+    }
+
+    /* New shop items */
+    .shop-item-new {
+      animation: popIn 0.3s cubic-bezier(0.22,1,0.36,1) both;
+    }
+
+    /* Button bounce */
+    .btn-bouncing { animation: btnBounce 0.35s cubic-bezier(0.22,1,0.36,1) both; }
+
     /* ─── Mobile ─────────────────────────────────────────────────── */
     @media (max-width: 480px) {
       body { padding: 20px 14px 110px; }
@@ -716,6 +787,7 @@ function render() {
 
     const card = document.createElement('div');
     card.className = 'category-card ' + colorClass + (isNeg ? ' over-budget' : '');
+    card.style.animationDelay = (index * 0.07 + 0.12) + 's';
 
     // Figure boxes
     let figureBoxes = '';
@@ -944,6 +1016,9 @@ function updateShopPanel(index) {
   panelEl.style.display = isOpen ? '' : 'none';
   toggleEl.textContent  = isOpen ? '▲ Close Calculator' : '🛒 Shop';
   if (!isOpen) return;
+  panelEl.classList.remove('shop-panel-open');
+  void panelEl.offsetWidth; // force reflow so animation replays
+  panelEl.classList.add('shop-panel-open');
 
   const items     = sessionTallies[index] || [];
   const cat       = data.categories[index];
@@ -958,7 +1033,7 @@ function updateShopPanel(index) {
   if (items.length > 0) {
     itemsHtml = `<div class="shop-items">` +
       items.map((item, i) => `
-        <div class="shop-item">
+        <div class="shop-item${i === items.length - 1 ? ' shop-item-new' : ''}">
           <span class="shop-item-label">${item.label ? escHtml(item.label) : '<em style="opacity:0.4">—</em>'}</span>
           <span class="shop-item-amount">${fmt(item.amount)}</span>
           <button class="shop-item-remove" onclick="removeShopItem(${index},${i})">×</button>
@@ -1006,6 +1081,20 @@ function updateShopPanel(index) {
     ${itemsHtml}
     ${items.length === 0 ? '<div class="shop-empty-hint">Enter an amount above and tap Add to start your tally.</div>' : summaryHtml}`;
 }
+
+
+// ─────────────────────────────────────────────────────────────────
+//  BUTTON BOUNCE
+// ─────────────────────────────────────────────────────────────────
+// Adds a satisfying bounce to any .btn-primary or .btn-add-cat tap.
+document.addEventListener('click', function(e) {
+  const btn = e.target.closest('.btn-primary, .btn-add-cat');
+  if (!btn) return;
+  btn.classList.remove('btn-bouncing');
+  void btn.offsetWidth; // replay animation
+  btn.classList.add('btn-bouncing');
+  btn.addEventListener('animationend', () => btn.classList.remove('btn-bouncing'), { once: true });
+});
 
 
 // ─────────────────────────────────────────────────────────────────

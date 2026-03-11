@@ -1021,8 +1021,8 @@ function render() {
 
     // Spend progress bar
     const spentPct   = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
-    const barClass   = spentPct >= 90 ? 'over' : spentPct >= 75 ? 'warning' : '';
-    const barWidth   = Math.min(100, spentPct).toFixed(1);
+    const barClass   = isNeg ? 'over' : spentPct >= 90 ? 'over' : spentPct >= 75 ? 'warning' : '';
+    const barWidth   = isNeg ? '100' : Math.min(100, spentPct).toFixed(1);
     const pctDisplay = Math.round(spentPct);
 
     const pills = `
@@ -1046,8 +1046,8 @@ function render() {
       <div class="cat-meta">${pills}</div>
       <div class="progress-wrap">
         <div class="progress-meta">
-          <span>${pctDisplay}% spent</span>
-          <span>${isNeg ? 'over budget' : fmt(cat.budget - cat.spent) + ' remaining'}</span>
+          <span>${isNeg ? 'Overspent' : pctDisplay + '% spent'}</span>
+          <span${isNeg ? ' style="color:rgb(200,30,30);font-weight:600;"' : ''}>${isNeg ? '-' + fmt(cat.spent - cat.budget) + ' over budget' : fmt(cat.budget - cat.spent) + ' remaining'}</span>
         </div>
         <div class="progress-track">
           <div class="progress-fill ${barClass}" style="width:${barWidth}%"></div>

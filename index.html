@@ -1392,7 +1392,7 @@ function updateShopPanel(index) {
     <div class="shop-input-row">
       <input class="shop-input-name" type="text" id="shop-label-${index}" placeholder="Item name (optional)"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
-      <input class="shop-input-amount" type="number" id="shop-amount-${index}" placeholder="$0.00" min="0" step="0.01"
+      <input class="shop-input-amount" type="number" id="shop-amount-${index}" placeholder="$0.00" min="0" step="0.01" inputmode="decimal"
              oninput="refreshTaxHint(${index})"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <button class="btn btn-primary btn-icon" onclick="addShopItem(${index})"><i data-lucide="plus"></i></button>

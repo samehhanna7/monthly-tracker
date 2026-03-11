@@ -536,16 +536,11 @@
     .shop-tax-hint-text.rate-five { background: rgba(176,120,0,0.1);  color: #b07800; }
     .shop-tax-hint-text.rate-hst  { background: rgba(0,0,0,0.06);     color: rgba(17,17,17,0.55); }
 
-    .shop-budget-preview { margin: 0 0 10px; }
-    .shop-budget-preview-text {
+    .shop-impact-text {
       font-size: 0.8rem;
       font-weight: 500;
       color: rgba(17,17,17,0.65);
-      padding: 6px 11px;
-      background: rgba(255,255,255,0.6);
-      border-radius: 10px;
-      border: 1px solid rgba(0,0,0,0.08);
-      display: inline-block;
+      margin: 0 0 10px;
     }
 
     .shop-item-tax-tag {
@@ -583,15 +578,22 @@
       background: rgba(0,0,0,0.1);
       border-radius: 99px;
       overflow: hidden;
+      display: flex;
     }
     .progress-fill {
       height: 100%;
       border-radius: 99px;
       background: var(--positive);
       transition: width 0.7s cubic-bezier(0.22,1,0.36,1);
+      flex-shrink: 0;
     }
     .progress-fill.warning { background: rgb(230, 160, 0); }
     .progress-fill.over    { background: rgb(200, 30, 30); }
+    .progress-cart {
+      height: 100%;
+      flex-shrink: 0;
+      background: rgba(0, 0, 0, 0.2);
+    }
 
     /* ─── Month Progress Bar (inside time card) ──────────────────── */
     .month-progress-row {
@@ -1225,7 +1227,7 @@ function render() {
           <span>${isNeg ? 'Overspent' : pctDisplay + '% spent'}</span>
           <span${isNeg ? ' style="color:rgb(200,30,30);font-weight:600;"' : ''}>${isNeg ? '-' + fmt(cat.spent - cat.budget) + ' over budget' : fmt(cat.budget - cat.spent) + ' remaining'}</span>
         </div>
-        <div class="progress-track">
+        <div class="progress-track" id="progress-track-${index}">
           <div class="progress-fill ${barClass}" style="width:${barWidth}%"></div>
         </div>
       </div>
@@ -1495,37 +1497,54 @@ function refreshTaxHint(index) {
       hintEl.innerHTML = '<span class="shop-tax-hint-text rate-hst">13% HST — price is over $4.00</span>';
     }
   }
-  refreshBudgetPreview(index);
+  refreshCartImpact(index);
 }
 
-// Shows a real-time budget impact preview while typing a price
-function refreshBudgetPreview(index) {
-  const previewEl = document.getElementById(`shop-budget-preview-${index}`);
-  if (!previewEl) return;
-  const catEl    = document.getElementById(`shop-cat-${index}`);
-  const amountEl = document.getElementById(`shop-amount-${index}`);
-  const catKey   = catEl ? catEl.value : '';
-  const rawAmt   = parseFloat(amountEl ? amountEl.value : '');
-  if (!catKey || !rawAmt || rawAmt <= 0) { previewEl.innerHTML = ''; return; }
+// Updates the grey cart bar on the category card and the text summary in the shop panel
+function refreshCartImpact(index) {
+  const textEl  = document.getElementById(`shop-impact-text-${index}`);
+  const trackEl = document.getElementById(`progress-track-${index}`);
+  const cat     = data.categories[index];
+  const tripTotal = (sessionTallies[index] || []).reduce((s, i) => s + i.amount, 0);
 
-  const taxRate    = getEffectiveTaxRate(catKey, rawAmt);
-  const previewAmt = Math.round(rawAmt * (1 + taxRate) * 100) / 100;
-  const tripTotal  = (sessionTallies[index] || []).reduce((s, i) => s + i.amount, 0);
-  const cat        = data.categories[index];
-  const timeInfo   = calcTimeRemaining();
-  const fig        = computeCategory(cat, timeInfo);
-  const currentRemaining = fig.remaining;
-  const afterBalance     = currentRemaining - tripTotal - previewAmt;
-
-  let afterHtml;
-  if (afterBalance <= 0) {
-    afterHtml = `<span style="color:rgb(200,30,30);font-weight:700">⚠️ Over budget after this purchase</span>`;
-  } else if (afterBalance < cat.budget * 0.25) {
-    afterHtml = `<span style="color:rgb(230,160,0);font-weight:700">${fmt(afterBalance)} after this purchase</span>`;
-  } else {
-    afterHtml = `<span style="color:rgb(39,103,73);font-weight:700">${fmt(afterBalance)} after this purchase</span>`;
+  // Remove any existing grey cart bar from the progress track
+  if (trackEl) {
+    const existing = trackEl.querySelector('.progress-cart');
+    if (existing) existing.remove();
   }
-  previewEl.innerHTML = `<div class="shop-budget-preview-text">${escHtml(cat.name)}: ${fmt(currentRemaining)} remaining → ${afterHtml}</div>`;
+
+  if (tripTotal <= 0) {
+    if (textEl) textEl.innerHTML = '';
+    return;
+  }
+
+  // Inject grey bar into the category card's progress track
+  if (trackEl && cat.budget > 0) {
+    const fillEl   = trackEl.querySelector('.progress-fill');
+    const fillWidth = fillEl ? parseFloat(fillEl.style.width) || 0 : 0;
+    const cartPct   = (tripTotal / cat.budget) * 100;
+    const cappedPct = Math.max(0, Math.min(cartPct, 100 - fillWidth));
+    const cartBar   = document.createElement('div');
+    cartBar.className   = 'progress-cart';
+    cartBar.style.width = cappedPct.toFixed(1) + '%';
+    trackEl.appendChild(cartBar);
+  }
+
+  // Text summary inside the shop panel
+  if (textEl) {
+    const timeInfo    = calcTimeRemaining();
+    const fig         = computeCategory(cat, timeInfo);
+    const afterBalance = fig.remaining - tripTotal;
+    let valueHtml;
+    if (afterBalance <= 0) {
+      valueHtml = `<span style="color:rgb(200,30,30);font-weight:600">⚠️ Over budget after this shop</span>`;
+    } else if (afterBalance < cat.budget * 0.25) {
+      valueHtml = `<span style="color:rgb(230,160,0);font-weight:600">${fmt(afterBalance)} remaining</span>`;
+    } else {
+      valueHtml = `<span style="color:rgb(39,103,73);font-weight:600">${fmt(afterBalance)} remaining</span>`;
+    }
+    textEl.innerHTML = `<div class="shop-impact-text">After this shop: ${valueHtml}</div>`;
+  }
 }
 
 function onCatChange(index) {
@@ -1660,7 +1679,7 @@ function updateShopPanel(index) {
       </select>
     </div>
     <div class="shop-tax-hint" id="shop-tax-hint-${index}"></div>
-    <div class="shop-budget-preview" id="shop-budget-preview-${index}"></div>
+    <div id="shop-impact-text-${index}"></div>
     ${itemsHtml}
     ${items.length === 0 ? '<div class="shop-empty-hint">Select a category and enter a price to start your tally.</div>' : summaryHtml}`;
 

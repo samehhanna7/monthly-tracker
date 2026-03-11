@@ -1639,6 +1639,8 @@ function attachPennyEntry(el, opts) {
 //  YNAB CATEGORY PICKER
 // ─────────────────────────────────────────────────────────────────
 let ynabCategoryCache = null; // array of name strings once fetched
+let ynabMonthCache    = null; // array of category objects from /months/current
+let ynabBudgetId      = null; // cached budget id
 let ynabPickerActive  = false;
 
 function restoreCatNameInput(value) {
@@ -1648,6 +1650,19 @@ function restoreCatNameInput(value) {
     + '<input type="text" id="cat-name" placeholder="e.g. Groceries" />';
   if (value) document.getElementById('cat-name').value = value;
   ynabPickerActive = false;
+}
+
+function onYnabCategorySelect() {
+  const select = document.getElementById('cat-name-select');
+  if (!select || !ynabMonthCache) return;
+  const name = select.value;
+  if (!name) return;
+  const match = ynabMonthCache.find(c => c.name === name);
+  if (!match) return;
+  const budgetEl = document.getElementById('cat-budget');
+  const spentEl  = document.getElementById('cat-spent');
+  if (budgetEl) budgetEl.value = (match.budgeted / 1000).toFixed(2);
+  if (spentEl)  spentEl.value  = Math.abs(match.activity / 1000).toFixed(2);
 }
 
 async function loadYnabCategoryPicker(currentName) {
@@ -1662,20 +1677,21 @@ async function loadYnabCategoryPicker(currentName) {
     + '<select id="cat-name-select" disabled><option value="">Loading YNAB categories…</option></select>';
 
   try {
-    if (!ynabCategoryCache) {
+    if (!ynabBudgetId) {
       const budgetsRes = await fetch('https://api.youneedabudget.com/v1/budgets', {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       if (!budgetsRes.ok) throw new Error('Budgets failed: ' + budgetsRes.status);
       const budgetsJson = await budgetsRes.json();
-      const budgetId = budgetsJson.data.budgets[0].id;
+      ynabBudgetId = budgetsJson.data.budgets[0].id;
+    }
 
-      const catsRes = await fetch('https://api.youneedabudget.com/v1/budgets/' + budgetId + '/categories', {
+    if (!ynabCategoryCache) {
+      const catsRes = await fetch('https://api.youneedabudget.com/v1/budgets/' + ynabBudgetId + '/categories', {
         headers: { 'Authorization': 'Bearer ' + token }
       });
       if (!catsRes.ok) throw new Error('Categories failed: ' + catsRes.status);
       const catsJson = await catsRes.json();
-
       const names = [];
       catsJson.data.category_groups.forEach(group => {
         group.categories.forEach(cat => {
@@ -1685,12 +1701,21 @@ async function loadYnabCategoryPicker(currentName) {
       ynabCategoryCache = names;
     }
 
+    if (!ynabMonthCache) {
+      const monthRes = await fetch('https://api.youneedabudget.com/v1/budgets/' + ynabBudgetId + '/months/current', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!monthRes.ok) throw new Error('Month failed: ' + monthRes.status);
+      const monthJson = await monthRes.json();
+      ynabMonthCache = monthJson.data.month.categories;
+    }
+
     const options = ynabCategoryCache.map(n =>
       `<option value="${escHtml(n)}">${escHtml(n)}</option>`
     ).join('');
 
     field.innerHTML = '<label>Category Name</label>'
-      + '<select id="cat-name-select">'
+      + '<select id="cat-name-select" onchange="onYnabCategorySelect()">'
       + '<option value="">Select a YNAB category…</option>'
       + options
       + '</select>';

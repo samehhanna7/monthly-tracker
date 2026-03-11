@@ -536,6 +536,18 @@
     .shop-tax-hint-text.rate-five { background: rgba(176,120,0,0.1);  color: #b07800; }
     .shop-tax-hint-text.rate-hst  { background: rgba(0,0,0,0.06);     color: rgba(17,17,17,0.55); }
 
+    .shop-budget-preview { margin: 0 0 10px; }
+    .shop-budget-preview-text {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: rgba(17,17,17,0.65);
+      padding: 6px 11px;
+      background: rgba(255,255,255,0.6);
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,0.08);
+      display: inline-block;
+    }
+
     .shop-item-tax-tag {
       font-size: 0.6rem;
       font-weight: 700;
@@ -1472,17 +1484,48 @@ function refreshTaxHint(index) {
   const amountEl = document.getElementById(`shop-amount-${index}`);
   if (!hintEl) return;
   const catKey = catEl ? catEl.value : '';
-  if (catKey !== 'cafe') { hintEl.innerHTML = ''; return; }
-  const amt = parseFloat(amountEl ? amountEl.value : '');
-  if (!amt || isNaN(amt) || amt <= 0) {
-    hintEl.innerHTML = '<span class="shop-tax-hint-text">Enter the price to see which rate applies</span>';
-    return;
+  if (catKey !== 'cafe') { hintEl.innerHTML = ''; }
+  else {
+    const amt = parseFloat(amountEl ? amountEl.value : '');
+    if (!amt || isNaN(amt) || amt <= 0) {
+      hintEl.innerHTML = '<span class="shop-tax-hint-text">Enter the price to see which rate applies</span>';
+    } else if (amt <= 4.00) {
+      hintEl.innerHTML = '<span class="shop-tax-hint-text rate-five">5% Fed. only — price is $4.00 or under</span>';
+    } else {
+      hintEl.innerHTML = '<span class="shop-tax-hint-text rate-hst">13% HST — price is over $4.00</span>';
+    }
   }
-  if (amt <= 4.00) {
-    hintEl.innerHTML = '<span class="shop-tax-hint-text rate-five">5% Fed. only — price is $4.00 or under</span>';
+  refreshBudgetPreview(index);
+}
+
+// Shows a real-time budget impact preview while typing a price
+function refreshBudgetPreview(index) {
+  const previewEl = document.getElementById(`shop-budget-preview-${index}`);
+  if (!previewEl) return;
+  const catEl    = document.getElementById(`shop-cat-${index}`);
+  const amountEl = document.getElementById(`shop-amount-${index}`);
+  const catKey   = catEl ? catEl.value : '';
+  const rawAmt   = parseFloat(amountEl ? amountEl.value : '');
+  if (!catKey || !rawAmt || rawAmt <= 0) { previewEl.innerHTML = ''; return; }
+
+  const taxRate    = getEffectiveTaxRate(catKey, rawAmt);
+  const previewAmt = Math.round(rawAmt * (1 + taxRate) * 100) / 100;
+  const tripTotal  = (sessionTallies[index] || []).reduce((s, i) => s + i.amount, 0);
+  const cat        = data.categories[index];
+  const timeInfo   = calcTimeRemaining();
+  const fig        = computeCategory(cat, timeInfo);
+  const currentRemaining = fig.remaining;
+  const afterBalance     = currentRemaining - tripTotal - previewAmt;
+
+  let afterHtml;
+  if (afterBalance <= 0) {
+    afterHtml = `<span style="color:rgb(200,30,30);font-weight:700">⚠️ Over budget after this purchase</span>`;
+  } else if (afterBalance < cat.budget * 0.25) {
+    afterHtml = `<span style="color:rgb(230,160,0);font-weight:700">${fmt(afterBalance)} after this purchase</span>`;
   } else {
-    hintEl.innerHTML = '<span class="shop-tax-hint-text rate-hst">13% HST — price is over $4.00</span>';
+    afterHtml = `<span style="color:rgb(39,103,73);font-weight:700">${fmt(afterBalance)} after this purchase</span>`;
   }
+  previewEl.innerHTML = `<div class="shop-budget-preview-text">${escHtml(cat.name)}: ${fmt(currentRemaining)} remaining → ${afterHtml}</div>`;
 }
 
 function onCatChange(index) {
@@ -1617,6 +1660,7 @@ function updateShopPanel(index) {
       </select>
     </div>
     <div class="shop-tax-hint" id="shop-tax-hint-${index}"></div>
+    <div class="shop-budget-preview" id="shop-budget-preview-${index}"></div>
     ${itemsHtml}
     ${items.length === 0 ? '<div class="shop-empty-hint">Select a category and enter a price to start your tally.</div>' : summaryHtml}`;
 

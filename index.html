@@ -1842,7 +1842,8 @@ async function syncFromYnab() {
       const matchKey = cat.ynabCategoryName || cat.name;
       const match = ynabCategories.find(yc => yc.name === matchKey);
       if (match) {
-        cat.spent = Math.abs(match.activity / 1000);
+        cat.spent  = Math.abs(match.activity  / 1000);
+        cat.budget = match.budgeted / 1000;
         changed = true;
       }
     });

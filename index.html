@@ -813,15 +813,15 @@
     </div>
     <div class="field">
       <label>Total Monthly Budget ($)</label>
-      <input type="number" id="cat-budget" placeholder="e.g. 600" min="0" step="0.01" inputmode="decimal" />
+      <input type="text" id="cat-budget" placeholder="e.g. 600" inputmode="decimal" />
     </div>
     <div class="field">
       <label>Amount Already Spent This Month ($)</label>
-      <input type="number" id="cat-spent" placeholder="e.g. 200" min="0" step="0.01" inputmode="decimal" />
+      <input type="text" id="cat-spent" placeholder="e.g. 200" inputmode="decimal" />
     </div>
     <div class="field">
       <label>Custom Weekly Spending Limit ($) <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#bbb">— optional</span></label>
-      <input type="number" id="cat-weekly-limit" placeholder="Leave blank to skip" min="0" step="0.01" inputmode="decimal" />
+      <input type="text" id="cat-weekly-limit" placeholder="Leave blank to skip" inputmode="decimal" />
       <div class="hint">Even if the math allows more, you won't want to spend over this each week.</div>
     </div>
     <div class="modal-actions">
@@ -1392,7 +1392,7 @@ function updateShopPanel(index) {
     <div class="shop-input-row">
       <input class="shop-input-name" type="text" id="shop-label-${index}" placeholder="Item name (optional)"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
-      <input class="shop-input-amount" type="number" id="shop-amount-${index}" placeholder="$0.00" min="0" step="0.01" inputmode="decimal"
+      <input class="shop-input-amount" type="text" id="shop-amount-${index}" placeholder="$0.00" inputmode="decimal"
              oninput="refreshTaxHint(${index})"
              onkeydown="if(event.key==='Enter') addShopItem(${index})" />
       <button class="btn btn-primary btn-icon" onclick="addShopItem(${index})"><i data-lucide="plus"></i></button>
@@ -1411,6 +1411,8 @@ function updateShopPanel(index) {
   const catEl = document.getElementById(`shop-cat-${index}`);
   if (catEl) catEl.value = sessionCatSelections[index] || '';
   refreshTaxHint(index);
+  const shopAmtEl = document.getElementById(`shop-amount-${index}`);
+  if (shopAmtEl) attachPennyEntry(shopAmtEl);
 
   if (window.lucide) lucide.createIcons();
 }
@@ -1431,10 +1433,45 @@ document.addEventListener('click', function(e) {
 
 
 // ─────────────────────────────────────────────────────────────────
+//  PENNY ENTRY
+// ─────────────────────────────────────────────────────────────────
+function attachPennyEntry(el, opts) {
+  // opts.optional = true: blur at 0 clears to '' (for optional fields)
+  let cents = 0;
+  el.addEventListener('focus', function() {
+    cents = 0;
+    this.value = '0.00';
+  });
+  el.addEventListener('keydown', function(e) {
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      cents = cents * 10 + parseInt(e.key, 10);
+      this.value = (cents / 100).toFixed(2);
+      this.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      cents = Math.floor(cents / 10);
+      this.value = (cents / 100).toFixed(2);
+      this.dispatchEvent(new Event('input', { bubbles: true }));
+    } else if (!['Tab','Enter','ArrowLeft','ArrowRight','ArrowUp','ArrowDown',
+                 'Shift','Control','Alt','Meta','CapsLock','Escape'].includes(e.key)) {
+      e.preventDefault();
+    }
+  });
+  el.addEventListener('blur', function() {
+    if (opts && opts.optional && cents === 0) { this.value = ''; }
+  });
+}
+
+
+// ─────────────────────────────────────────────────────────────────
 //  BOOT
 // ─────────────────────────────────────────────────────────────────
 render();
 if (window.lucide) lucide.createIcons();
+attachPennyEntry(document.getElementById('cat-budget'));
+attachPennyEntry(document.getElementById('cat-spent'));
+attachPennyEntry(document.getElementById('cat-weekly-limit'), { optional: true });
 </script>
 </body>
 </html>

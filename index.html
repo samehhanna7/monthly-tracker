@@ -1315,6 +1315,7 @@ function openEditModal(index) {
 function closeAddModal() {
   document.getElementById('modal-category').classList.add('hidden');
   ynabPickerActive = false;
+  ynabPickerPreSelectedValue = null;
 }
 
 document.getElementById('btn-add-category').addEventListener('click', openAddModal);
@@ -1638,10 +1639,11 @@ function attachPennyEntry(el, opts) {
 // ─────────────────────────────────────────────────────────────────
 //  YNAB CATEGORY PICKER
 // ─────────────────────────────────────────────────────────────────
-let ynabCategoryCache = null; // array of name strings once fetched
-let ynabMonthCache    = null; // array of category objects from /months/current
-let ynabBudgetId      = null; // cached budget id
-let ynabPickerActive  = false;
+let ynabCategoryCache        = null; // array of name strings once fetched
+let ynabMonthCache           = null; // array of category objects from /months/current
+let ynabBudgetId             = null; // cached budget id
+let ynabPickerActive         = false;
+let ynabPickerPreSelectedValue = null; // value pre-selected when opening edit; autofill skipped unless user changes it
 
 function restoreCatNameInput(value) {
   const field = document.getElementById('cat-name-field');
@@ -1650,6 +1652,7 @@ function restoreCatNameInput(value) {
     + '<input type="text" id="cat-name" placeholder="e.g. Groceries" />';
   if (value) document.getElementById('cat-name').value = value;
   ynabPickerActive = false;
+  ynabPickerPreSelectedValue = null;
 }
 
 function onYnabCategorySelect() {
@@ -1657,6 +1660,8 @@ function onYnabCategorySelect() {
   if (!select || !ynabMonthCache) return;
   const name = select.value;
   if (!name) return;
+  // If the user hasn't changed from the pre-selected value, don't overwrite budget/spent
+  if (name === ynabPickerPreSelectedValue) return;
   const match = ynabMonthCache.find(c => c.name === name);
   if (!match) return;
   const budgetEl = document.getElementById('cat-budget');
@@ -1720,7 +1725,14 @@ async function loadYnabCategoryPicker(currentName) {
       + options
       + '</select>';
 
-    if (currentName) document.getElementById('cat-name-select').value = currentName;
+    if (currentName) {
+      const sel = document.getElementById('cat-name-select');
+      sel.value = currentName;
+      // Record what was pre-selected so autofill is skipped unless the user changes it
+      ynabPickerPreSelectedValue = sel.value || null;
+    } else {
+      ynabPickerPreSelectedValue = null;
+    }
     ynabPickerActive = true;
   } catch (err) {
     console.error('YNAB category picker error:', err);

@@ -1530,21 +1530,6 @@ function refreshCartImpact(index) {
     trackEl.appendChild(cartBar);
   }
 
-  // Text summary inside the shop panel
-  if (textEl) {
-    const timeInfo    = calcTimeRemaining();
-    const fig         = computeCategory(cat, timeInfo);
-    const afterBalance = fig.remaining - tripTotal;
-    let valueHtml;
-    if (afterBalance <= 0) {
-      valueHtml = `<span style="color:rgb(200,30,30);font-weight:600">⚠️ Over budget after this shop</span>`;
-    } else if (afterBalance < cat.budget * 0.25) {
-      valueHtml = `<span style="color:rgb(230,160,0);font-weight:600">${fmt(afterBalance)} remaining</span>`;
-    } else {
-      valueHtml = `<span style="color:rgb(39,103,73);font-weight:600">${fmt(afterBalance)} remaining</span>`;
-    }
-    textEl.innerHTML = `<div class="shop-impact-text">After this shop: ${valueHtml}</div>`;
-  }
 }
 
 function onCatChange(index) {

@@ -1323,7 +1323,9 @@ document.getElementById('btn-cat-cancel').addEventListener('click', closeAddModa
 
 document.getElementById('btn-cat-save').addEventListener('click', () => {
   const nameEl = document.getElementById('cat-name') || document.getElementById('cat-name-select');
-  const name   = nameEl ? nameEl.value.trim() : '';
+  let name     = nameEl ? nameEl.value.trim() : '';
+  // If editing and the dropdown has no selection, preserve the existing stored name
+  if (!name && editingIndex !== null) name = (data.categories[editingIndex].name || '').trim();
   const budget = document.getElementById('cat-budget').value.trim();
   const spent  = document.getElementById('cat-spent').value.trim();
   const wLimit = document.getElementById('cat-weekly-limit').value.trim();

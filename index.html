@@ -345,6 +345,24 @@
     /* ─── Confirm text ───────────────────────────────────────────── */
     .confirm-text { font-size: 0.92rem; color: var(--muted); line-height: 1.6; }
 
+    /* ─── Summary Card ───────────────────────────────────────────── */
+    .summary-card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 18px 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+      animation: fadeSlideUp 0.45s cubic-bezier(0.22,1,0.36,1) 0.08s both;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    @media (max-width: 480px) {
+      .summary-grid { grid-template-columns: 1fr; }
+    }
+
     /* ─── Month setup card ───────────────────────────────────────── */
     .setup-card {
       background: var(--surface);
@@ -755,6 +773,24 @@
     <button class="btn btn-primary" id="btn-save-month">Save &amp; Start Tracking</button>
   </div>
 
+  <!-- Summary -->
+  <div id="summary-card" class="summary-card" style="display:none;">
+    <div class="summary-grid">
+      <div class="figure-box">
+        <div class="figure-label">Total Budgeted</div>
+        <div class="figure-value" id="summary-budgeted">$0.00</div>
+      </div>
+      <div class="figure-box">
+        <div class="figure-label">Total Spent</div>
+        <div class="figure-value" id="summary-spent">$0.00</div>
+      </div>
+      <div class="figure-box">
+        <div class="figure-label">Total Remaining</div>
+        <div class="figure-value" id="summary-remaining">$0.00</div>
+      </div>
+    </div>
+  </div>
+
   <!-- Categories -->
   <div class="section-header">
     <h2>Budget Categories</h2>
@@ -1034,8 +1070,25 @@ function render() {
     if (openShopPanels.has(index)) updateShopPanel(index);
   });
 
+  // Summary card
+  renderSummary();
+
   // Render all lucide icons that were injected as HTML strings
   if (window.lucide) lucide.createIcons();
+}
+
+function renderSummary() {
+  const summaryCard = document.getElementById('summary-card');
+  if (data.categories.length === 0) { summaryCard.style.display = 'none'; return; }
+  const totalBudget    = data.categories.reduce((s, c) => s + (c.budget || 0), 0);
+  const totalSpent     = data.categories.reduce((s, c) => s + (c.spent  || 0), 0);
+  const totalRemaining = totalBudget - totalSpent;
+  document.getElementById('summary-budgeted').textContent = fmt(totalBudget);
+  document.getElementById('summary-spent').textContent    = fmt(totalSpent);
+  const remEl = document.getElementById('summary-remaining');
+  remEl.textContent = fmt(totalRemaining);
+  remEl.className   = 'figure-value' + (totalRemaining < 0 ? ' negative' : '');
+  summaryCard.style.display = '';
 }
 
 function escHtml(str) {

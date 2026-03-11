@@ -350,6 +350,23 @@
     /* ─── Confirm text ───────────────────────────────────────────── */
     .confirm-text { font-size: 0.92rem; color: var(--muted); line-height: 1.6; }
 
+    /* ─── YNAB Category Picker (in modal) ───────────────────────── */
+    .field select {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1.5px solid #e0ddd5;
+      border-radius: 14px;
+      font-family: inherit;
+      font-size: 1rem;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.15s;
+      cursor: pointer;
+    }
+    .field select:focus { border-color: var(--accent); background: #fff; }
+    .field select:disabled { opacity: 0.5; cursor: default; }
+
     /* ─── Summary Card ───────────────────────────────────────────── */
     .summary-card {
       background: var(--surface);
@@ -946,7 +963,7 @@
 <div id="modal-category" class="modal-overlay hidden">
   <div class="modal">
     <h3 id="modal-cat-title">Add Budget Category</h3>
-    <div class="field">
+    <div class="field" id="cat-name-field">
       <label>Category Name</label>
       <input type="text" id="cat-name" placeholder="e.g. Groceries" />
     </div>
@@ -1275,37 +1292,45 @@ let editingIndex = null;
 function openAddModal() {
   editingIndex = null;
   document.getElementById('modal-cat-title').textContent = 'Add Budget Category';
-  ['cat-name','cat-budget','cat-spent','cat-weekly-limit'].forEach(id => document.getElementById(id).value = '');
+  restoreCatNameInput('');
+  ['cat-budget','cat-spent','cat-weekly-limit'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('modal-category').classList.remove('hidden');
   document.getElementById('cat-name').focus();
+  loadYnabCategoryPicker(null);
 }
 
 function openEditModal(index) {
   editingIndex = index;
   const cat = data.categories[index];
   document.getElementById('modal-cat-title').textContent = 'Edit Category';
-  document.getElementById('cat-name').value         = cat.name;
+  restoreCatNameInput(cat.name);
   document.getElementById('cat-budget').value       = cat.budget;
   document.getElementById('cat-spent').value        = cat.spent;
   document.getElementById('cat-weekly-limit').value = cat.weeklyLimit ?? '';
   document.getElementById('modal-category').classList.remove('hidden');
   document.getElementById('cat-name').focus();
+  loadYnabCategoryPicker(cat.name);
 }
 
-function closeAddModal() { document.getElementById('modal-category').classList.add('hidden'); }
+function closeAddModal() {
+  document.getElementById('modal-category').classList.add('hidden');
+  ynabPickerActive = false;
+}
 
 document.getElementById('btn-add-category').addEventListener('click', openAddModal);
 document.getElementById('btn-cat-cancel').addEventListener('click', closeAddModal);
 
 document.getElementById('btn-cat-save').addEventListener('click', () => {
-  const name   = document.getElementById('cat-name').value.trim();
+  const nameEl = document.getElementById('cat-name') || document.getElementById('cat-name-select');
+  const name   = nameEl ? nameEl.value.trim() : '';
   const budget = document.getElementById('cat-budget').value.trim();
   const spent  = document.getElementById('cat-spent').value.trim();
   const wLimit = document.getElementById('cat-weekly-limit').value.trim();
   if (!name)     { alert('Please enter a category name.'); return; }
   if (!budget)   { alert('Please enter a total monthly budget.'); return; }
   if (spent==='') { alert('Please enter amount spent (enter 0 if nothing spent yet).'); return; }
-  const catObj = { name, budget: parseFloat(budget), spent: parseFloat(spent), weeklyLimit: wLimit !== '' ? parseFloat(wLimit) : null };
+  const existingSyncFromYnab = editingIndex !== null ? (data.categories[editingIndex].syncFromYnab || false) : false;
+  const catObj = { name, budget: parseFloat(budget), spent: parseFloat(spent), weeklyLimit: wLimit !== '' ? parseFloat(wLimit) : null, syncFromYnab: ynabPickerActive ? true : existingSyncFromYnab };
   if (editingIndex === null) data.categories.push(catObj);
   else data.categories[editingIndex] = catObj;
   saveData(data); closeAddModal(); render();
@@ -1607,6 +1632,75 @@ function attachPennyEntry(el, opts) {
   el.addEventListener('blur', function() {
     if (opts && opts.optional && cents === 0) { this.value = ''; }
   });
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+//  YNAB CATEGORY PICKER
+// ─────────────────────────────────────────────────────────────────
+let ynabCategoryCache = null; // array of name strings once fetched
+let ynabPickerActive  = false;
+
+function restoreCatNameInput(value) {
+  const field = document.getElementById('cat-name-field');
+  if (!field) return;
+  field.innerHTML = '<label>Category Name</label>'
+    + '<input type="text" id="cat-name" placeholder="e.g. Groceries" />';
+  if (value) document.getElementById('cat-name').value = value;
+  ynabPickerActive = false;
+}
+
+async function loadYnabCategoryPicker(currentName) {
+  const token = localStorage.getItem('ynabToken');
+  if (!token) return; // leave text input as-is
+
+  const field = document.getElementById('cat-name-field');
+  if (!field) return;
+
+  // Show loading state
+  field.innerHTML = '<label>Category Name</label>'
+    + '<select id="cat-name-select" disabled><option value="">Loading YNAB categories…</option></select>';
+
+  try {
+    if (!ynabCategoryCache) {
+      const budgetsRes = await fetch('https://api.youneedabudget.com/v1/budgets', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!budgetsRes.ok) throw new Error('Budgets failed: ' + budgetsRes.status);
+      const budgetsJson = await budgetsRes.json();
+      const budgetId = budgetsJson.data.budgets[0].id;
+
+      const catsRes = await fetch('https://api.youneedabudget.com/v1/budgets/' + budgetId + '/categories', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      });
+      if (!catsRes.ok) throw new Error('Categories failed: ' + catsRes.status);
+      const catsJson = await catsRes.json();
+
+      const names = [];
+      catsJson.data.category_groups.forEach(group => {
+        group.categories.forEach(cat => {
+          if (!cat.deleted && !cat.hidden) names.push(cat.name);
+        });
+      });
+      ynabCategoryCache = names;
+    }
+
+    const options = ynabCategoryCache.map(n =>
+      `<option value="${escHtml(n)}">${escHtml(n)}</option>`
+    ).join('');
+
+    field.innerHTML = '<label>Category Name</label>'
+      + '<select id="cat-name-select">'
+      + '<option value="">Select a YNAB category…</option>'
+      + options
+      + '</select>';
+
+    if (currentName) document.getElementById('cat-name-select').value = currentName;
+    ynabPickerActive = true;
+  } catch (err) {
+    console.error('YNAB category picker error:', err);
+    restoreCatNameInput(currentName || '');
+  }
 }
 
 

@@ -717,11 +717,134 @@
       .cat-actions .btn { padding: 6px 10px; font-size: 0.74rem; }
       .btn-add-cat { padding: 18px; font-size: 0.98rem; }
     }
+
+    /* ─── YNAB Error Banner ──────────────────────────────────────── */
+    .ynab-banner {
+      background: var(--danger-dim);
+      border: 1px solid #f5c6c2;
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      color: var(--danger);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .ynab-banner.hidden { display: none; }
+    .ynab-banner-close {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--danger);
+      padding: 0 4px;
+      font-size: 1.2rem;
+      line-height: 1;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+    .ynab-banner-close:hover { opacity: 1; }
+
+    /* ─── YNAB Settings ──────────────────────────────────────────── */
+    .ynab-settings {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+    .ynab-settings h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ynab-settings .ynab-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+    .ynab-token-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .ynab-token-row input {
+      flex: 1;
+      border: 1.5px solid #e0ddd6;
+      border-radius: 10px;
+      padding: 9px 13px;
+      font-size: 0.88rem;
+      font-family: inherit;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+    }
+    .ynab-token-row input:focus { border-color: var(--accent); }
+    .ynab-saved-note {
+      font-size: 0.78rem;
+      color: var(--positive);
+      margin-top: 8px;
+      display: none;
+    }
+    .ynab-saved-note.visible { display: block; }
+
+    /* ─── Sync Toggle ────────────────────────────────────────────── */
+    .sync-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 10px 0 4px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    .sync-toggle {
+      position: relative;
+      width: 34px;
+      height: 19px;
+      flex-shrink: 0;
+    }
+    .sync-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .sync-toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #d5d2ca;
+      border-radius: 19px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .sync-toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 13px;
+      height: 13px;
+      left: 3px;
+      top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .sync-toggle input:checked + .sync-toggle-slider { background: var(--accent); }
+    .sync-toggle input:checked + .sync-toggle-slider::before { transform: translateX(15px); }
   </style>
 </head>
 <body>
 
 <div class="app">
+
+  <!-- YNAB Error Banner -->
+  <div id="ynab-banner" class="ynab-banner hidden">
+    <span>YNAB sync failed. Your existing data has not been changed.</span>
+    <button class="ynab-banner-close" onclick="dismissYnabBanner()">×</button>
+  </div>
 
   <!-- Header -->
   <div class="header">
@@ -802,6 +925,17 @@
   </div>
 
   <div id="category-list" class="category-list"></div>
+
+  <!-- YNAB Connection -->
+  <div class="ynab-settings">
+    <h3><i data-lucide="link-2"></i> YNAB Connection</h3>
+    <div class="ynab-sub">Enter your YNAB Personal Access Token to enable automatic sync.</div>
+    <div class="ynab-token-row">
+      <input type="password" id="ynab-token-input" placeholder="Personal Access Token" autocomplete="off" />
+      <button class="btn btn-primary" id="btn-ynab-save">Save</button>
+    </div>
+    <div class="ynab-saved-note" id="ynab-saved-note">Token saved.</div>
+  </div>
 
   <button class="btn btn-add-cat" id="btn-add-category"><i data-lucide="plus-circle"></i> Add Budget Category</button>
 
@@ -1058,7 +1192,14 @@ function render() {
           <div class="progress-fill ${barClass}" style="width:${barWidth}%"></div>
         </div>
       </div>
-      <div class="cat-figures">${figureBoxes}</div>`;
+      <div class="cat-figures">${figureBoxes}</div>
+      <div class="sync-toggle-row">
+        Sync from YNAB
+        <label class="sync-toggle">
+          <input type="checkbox" ${cat.syncFromYnab ? 'checked' : ''} onchange="setSyncFromYnab(${index}, this.checked)" />
+          <span class="sync-toggle-slider"></span>
+        </label>
+      </div>`;
 
     listEl.appendChild(card);
 
@@ -1470,6 +1611,81 @@ function attachPennyEntry(el, opts) {
 
 
 // ─────────────────────────────────────────────────────────────────
+//  YNAB SETTINGS
+// ─────────────────────────────────────────────────────────────────
+(function prefillYnabToken() {
+  const token = localStorage.getItem('ynabToken');
+  if (token) document.getElementById('ynab-token-input').value = token;
+})();
+
+document.getElementById('btn-ynab-save').addEventListener('click', () => {
+  const token = document.getElementById('ynab-token-input').value.trim();
+  if (!token) return;
+  localStorage.setItem('ynabToken', token);
+  const note = document.getElementById('ynab-saved-note');
+  note.classList.add('visible');
+  setTimeout(() => note.classList.remove('visible'), 2000);
+});
+
+
+// ─────────────────────────────────────────────────────────────────
+//  SYNC TOGGLE
+// ─────────────────────────────────────────────────────────────────
+function setSyncFromYnab(index, value) {
+  data.categories[index].syncFromYnab = value;
+  saveData(data);
+}
+
+
+// ─────────────────────────────────────────────────────────────────
+//  YNAB SYNC
+// ─────────────────────────────────────────────────────────────────
+function dismissYnabBanner() {
+  document.getElementById('ynab-banner').classList.add('hidden');
+}
+
+async function syncFromYnab() {
+  const token = localStorage.getItem('ynabToken');
+  if (!token) return;
+  if (!data.categories.some(c => c.syncFromYnab)) return;
+
+  try {
+    const budgetsRes = await fetch('https://api.youneedabudget.com/v1/budgets', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!budgetsRes.ok) throw new Error('Budgets request failed: ' + budgetsRes.status);
+    const budgetsJson = await budgetsRes.json();
+    const budgetId = budgetsJson.data.budgets[0].id;
+
+    const monthRes = await fetch('https://api.youneedabudget.com/v1/budgets/' + budgetId + '/months/current', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!monthRes.ok) throw new Error('Month request failed: ' + monthRes.status);
+    const monthJson = await monthRes.json();
+    const ynabCategories = monthJson.data.month.categories;
+
+    let changed = false;
+    data.categories.forEach(cat => {
+      if (!cat.syncFromYnab) return;
+      const match = ynabCategories.find(yc => yc.name === cat.name);
+      if (match) {
+        cat.spent = Math.abs(match.activity / 1000);
+        changed = true;
+      }
+    });
+
+    if (changed) {
+      saveData(data);
+      render();
+    }
+  } catch (err) {
+    console.error('YNAB sync error:', err);
+    document.getElementById('ynab-banner').classList.remove('hidden');
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────
 //  BOOT
 // ─────────────────────────────────────────────────────────────────
 render();
@@ -1477,6 +1693,7 @@ if (window.lucide) lucide.createIcons();
 attachPennyEntry(document.getElementById('cat-budget'));
 attachPennyEntry(document.getElementById('cat-spent'));
 attachPennyEntry(document.getElementById('cat-weekly-limit'), { optional: true });
+syncFromYnab();
 </script>
 </body>
 </html>

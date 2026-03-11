@@ -1062,7 +1062,7 @@ function render() {
     shopWrap.innerHTML = `
       <div class="shop-divider"></div>
       <button class="shop-toggle" id="shop-toggle-${index}" onclick="toggleShopPanel(${index})">
-        🛒 Shop
+        <i data-lucide="shopping-cart"></i> Shop
       </button>
       <div id="shop-panel-${index}" class="shop-panel" style="display:none;"></div>`;
     card.appendChild(shopWrap);
@@ -1323,7 +1323,8 @@ function updateShopPanel(index) {
   if (!panelEl || !toggleEl) return;
   const isOpen = openShopPanels.has(index);
   panelEl.style.display = isOpen ? '' : 'none';
-  toggleEl.textContent  = isOpen ? '▲ Close Calculator' : '🛒 Shop';
+  toggleEl.innerHTML    = isOpen ? '▲ Close Calculator' : '<i data-lucide="shopping-cart"></i> Shop';
+  if (window.lucide) lucide.createIcons({ el: toggleEl });
   if (!isOpen) return;
   panelEl.classList.remove('shop-panel-open');
   void panelEl.offsetWidth; // force reflow so animation replays

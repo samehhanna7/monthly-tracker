@@ -556,8 +556,8 @@
       background: var(--positive);
       transition: width 0.7s cubic-bezier(0.22,1,0.36,1);
     }
-    .progress-fill.warning { background: #c97d0a; }
-    .progress-fill.over    { background: var(--danger); }
+    .progress-fill.warning { background: rgb(180, 100, 20); }
+    .progress-fill.over    { background: rgb(180, 40, 40); }
 
     /* ─── Month Progress Bar (inside time card) ──────────────────── */
     .month-progress-row {
@@ -1021,7 +1021,7 @@ function render() {
 
     // Spend progress bar
     const spentPct   = cat.budget > 0 ? (cat.spent / cat.budget) * 100 : 0;
-    const barClass   = spentPct >= 100 ? 'over' : spentPct >= 80 ? 'warning' : '';
+    const barClass   = spentPct >= 90 ? 'over' : spentPct >= 75 ? 'warning' : '';
     const barWidth   = Math.min(100, spentPct).toFixed(1);
     const pctDisplay = Math.round(spentPct);
 

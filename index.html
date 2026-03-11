@@ -1309,7 +1309,7 @@ function openEditModal(index) {
   document.getElementById('cat-weekly-limit').value = cat.weeklyLimit ?? '';
   document.getElementById('modal-category').classList.remove('hidden');
   document.getElementById('cat-name').focus();
-  loadYnabCategoryPicker(cat.name);
+  loadYnabCategoryPicker(cat.ynabCategoryName || cat.name);
 }
 
 function closeAddModal() {
@@ -1326,14 +1326,25 @@ document.getElementById('btn-cat-save').addEventListener('click', () => {
   let name     = nameEl ? nameEl.value.trim() : '';
   // If editing and the dropdown has no selection, preserve the existing stored name
   if (!name && editingIndex !== null) name = (data.categories[editingIndex].name || '').trim();
+  // Hard guard — never save with an empty name
+  if (!name) {
+    if (editingIndex === null) alert('Please enter a category name.');
+    return;
+  }
   const budget = document.getElementById('cat-budget').value.trim();
   const spent  = document.getElementById('cat-spent').value.trim();
   const wLimit = document.getElementById('cat-weekly-limit').value.trim();
-  if (!name)     { alert('Please enter a category name.'); return; }
   if (!budget)   { alert('Please enter a total monthly budget.'); return; }
   if (spent==='') { alert('Please enter amount spent (enter 0 if nothing spent yet).'); return; }
-  const existingSyncFromYnab = editingIndex !== null ? (data.categories[editingIndex].syncFromYnab || false) : false;
-  const catObj = { name, budget: parseFloat(budget), spent: parseFloat(spent), weeklyLimit: wLimit !== '' ? parseFloat(wLimit) : null, syncFromYnab: ynabPickerActive ? true : existingSyncFromYnab };
+  const existingSyncFromYnab      = editingIndex !== null ? (data.categories[editingIndex].syncFromYnab      || false) : false;
+  const existingYnabCategoryName  = editingIndex !== null ? (data.categories[editingIndex].ynabCategoryName  || null)  : null;
+  // ynabCategoryName: set from picker selection when active, otherwise preserve existing
+  let ynabCategoryName = existingYnabCategoryName;
+  if (ynabPickerActive) {
+    const sel = document.getElementById('cat-name-select');
+    ynabCategoryName = (sel && sel.value) ? sel.value : existingYnabCategoryName;
+  }
+  const catObj = { name, budget: parseFloat(budget), spent: parseFloat(spent), weeklyLimit: wLimit !== '' ? parseFloat(wLimit) : null, syncFromYnab: ynabPickerActive ? true : existingSyncFromYnab, ynabCategoryName };
   if (editingIndex === null) data.categories.push(catObj);
   else data.categories[editingIndex] = catObj;
   saveData(data); closeAddModal(); render();
@@ -1800,7 +1811,8 @@ async function syncFromYnab() {
     let changed = false;
     data.categories.forEach(cat => {
       if (!cat.syncFromYnab) return;
-      const match = ynabCategories.find(yc => yc.name === cat.name);
+      const matchKey = cat.ynabCategoryName || cat.name;
+      const match = ynabCategories.find(yc => yc.name === matchKey);
       if (match) {
         cat.spent = Math.abs(match.activity / 1000);
         changed = true;

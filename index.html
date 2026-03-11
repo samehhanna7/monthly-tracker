@@ -664,6 +664,13 @@
       100% { opacity: 1; transform: scale(1)    translateX(0); }
     }
 
+    /* YNAB sync button spin */
+    @keyframes ynabSpin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    #btn-ynab-sync.syncing i[data-lucide] { animation: ynabSpin 0.8s linear infinite; }
+
     /* Button bounce on press */
     @keyframes btnBounce {
       0%   { transform: scale(1); }
@@ -870,6 +877,7 @@
       <h1>Monthly Tracker</h1>
     </div>
     <div class="header-actions">
+      <button class="btn btn-ghost btn-icon hidden" id="btn-ynab-sync" title="Sync from YNAB"><i data-lucide="refresh-cw"></i></button>
       <button class="btn btn-ghost" id="btn-new-month"><i data-lucide="rotate-ccw"></i> New Month</button>
     </div>
   </div>
@@ -1377,6 +1385,26 @@ document.getElementById('btn-delete-ok').addEventListener('click', () => {
 document.getElementById('modal-delete').addEventListener('click', function(e) {
   if (e.target === this) document.getElementById('modal-delete').classList.add('hidden');
 });
+
+
+// ─────────────────────────────────────────────────────────────────
+//  YNAB SYNC BUTTON
+// ─────────────────────────────────────────────────────────────────
+(function initYnabSyncBtn() {
+  const btn = document.getElementById('btn-ynab-sync');
+  if (localStorage.getItem('ynabToken')) btn.classList.remove('hidden');
+  btn.addEventListener('click', async () => {
+    btn.classList.add('syncing');
+    btn.disabled = true;
+    try {
+      await syncFromYnab();
+    } finally {
+      btn.classList.remove('syncing');
+      btn.disabled = false;
+      lucide.createIcons();
+    }
+  });
+})();
 
 
 // ─────────────────────────────────────────────────────────────────
